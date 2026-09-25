@@ -1,0 +1,63 @@
+name: App99
+
+options:
+  bundleIdPrefix: com.elias
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+settings:
+  base:
+    # Linguagem Swift 5 (o compilador aceita 4, 4.2, 5 ou 6 aqui; o código usa recursos do Swift 5.9)
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  App99:
+    type: application
+    platform: iOS
+    sources:
+      - App99
+      - Shared
+    info:
+      path: App99/Info.plist
+      properties:
+        CFBundleDisplayName: App 99
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.elias.app99
+        PRODUCT_NAME: App99
+    dependencies:
+      - target: Broadcast
+        embed: true
+      - sdk: ReplayKit.framework
+    scheme: {}
+
+  Broadcast:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Broadcast
+      - Shared
+    info:
+      path: Broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: App 99
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.elias.app99.broadcast
+        PRODUCT_NAME: Broadcast
+    dependencies:
+      - sdk: ReplayKit.framework

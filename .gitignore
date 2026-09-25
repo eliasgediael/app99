@@ -1,0 +1,26 @@
+# Gerado pelo XcodeGen (o CI gera de novo a partir do project.yml)
+*.xcodeproj/
+*.xcworkspace/
+App99/Info.plist
+Broadcast/Info.plist
+
+# Xcode
+build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.moved-aside
+*.hmap
+*.dSYM
+*.dSYM.zip
+
+# Pacotes
+Payload/
+*.ipa
+.swiftpm/
+.build/
+Packages/
+
+# Sistema
+.DS_Store
+Thumbs.db
