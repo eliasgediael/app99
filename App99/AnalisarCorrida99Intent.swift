@@ -25,6 +25,7 @@ struct AnalisarCorrida99Intent: AppIntent {
             frase = "Não consegui ler a corrida."
         }
 
+        Notificador.enviar(frase)   // caso o áudio não toque
         await Narrador.shared.falar(frase)
         return .result(value: frase)   // também sai pro Atalho, se quiser usar "Falar texto"
     }
