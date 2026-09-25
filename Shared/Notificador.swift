@@ -10,8 +10,8 @@ enum Notificador {
     }
 
     /// 🟢 Corrida boa · ⭐ 4,95
-    /// 💰 Lucro R$ 8,96 · R$ 1,08/km
-    /// 📏 11,2 km no total
+    /// 💵 R$ 12,10 · 💰 Lucro R$ 8,18
+    /// 📊 R$ 1,08/km · 📏 11,2 km
     static func enviar(_ a: AnaliseCorrida) {
         var titulo = "\(a.veredito.emoji) \(a.veredito.falado)"
         if let nota = a.oferta.notaPassageiro {
@@ -21,8 +21,8 @@ enum Notificador {
 
         enviar(titulo: titulo,
                subtitulo: nil,
-               corpo: "💰 Lucro \(Formato.reais(a.lucro)) · \(Formato.reais(a.ganhoPorKm))/km\n"
-                    + "📏 \(Formato.km(a.kmTotal)) no total")
+               corpo: "💵 \(Formato.reais(a.oferta.valor)) · 💰 Lucro \(Formato.reais(a.lucro))\n"
+                    + "📊 \(Formato.reais(a.ganhoPorKm))/km · 📏 \(Formato.km(a.kmTotal))")
     }
 
     static func enviar(_ frase: String) {
