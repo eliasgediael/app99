@@ -107,6 +107,11 @@ struct ResumoDiaView: View {
         Text("🛵 \(dia.corridas) corrida\(dia.corridas == 1 ? "" : "s") · \(Formato.km(dia.km))")
         Text(linhaMedias)
         Text("✅ Aceitou \(dia.corridas) de \(dia.ofertas) oferta\(dia.ofertas == 1 ? "" : "s")")
+        if dia.estimadas > 0 {
+            // Fora do faturamento: faltou alguma evidência (ver a linha do tempo)
+            Text("🟡 Estimado (fora do total): \(Formato.reais(dia.estimado)) · \(dia.estimadas) corrida\(dia.estimadas == 1 ? "" : "s")")
+                .foregroundStyle(.orange)
+        }
     }
 
     private var linhaMedias: String {
@@ -130,7 +135,7 @@ struct RelatorioSections: View {
         } header: {
             Text("Hoje — \(Datas.curta(store.hoje.data))")
         } footer: {
-            Text("A corrida entra quando você finaliza a viagem na 99. ⏱️ = lucro por hora com a leitura ligada. Prints de teste não contam.")
+            Text("Só entram corridas CONFIRMADAS (aceite, passageiro a bordo e fim de corrida vistos na tela). ⏱️ = lucro por hora com a leitura ligada. Prints de teste não contam.")
         }
 
         if !store.anteriores.isEmpty {

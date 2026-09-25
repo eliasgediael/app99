@@ -168,6 +168,13 @@ enum ParserOferta99 {
         )
     }
 
+    /// Maior valor em R$ da tela, em centavos (ex.: valor final na tela de fim de corrida).
+    static func maiorValorCent(em linhas: [String]) -> Int? {
+        capturas(regexValor, em: linhas.joined(separator: "
+")).compactMap(converterReais).max()
+            .map { Int(($0 * 100).rounded()) }
+    }
+
     /// 1º: linha com "corridas" (ex.: "4,95 • +999 corridas"), sem R$ (evita "R$ 1,14 ... por corrida").
     /// 2º: linha que é só a nota, quando o OCR separa "4,95" de "+999 corridas".
     static func extrairNota(de linhas: [String]) -> Double? {

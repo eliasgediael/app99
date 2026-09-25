@@ -1,17 +1,34 @@
 import Foundation
 
-/// Totais por dia guardados na própria extensão (o UserDefaults dela sobrevive entre transmissões,
-/// atualizações e renovações do AltStore). O app recebe uma cópia pelo CanalDarwin.
-/// Usar sempre na mesma fila (a filaOCR do SampleHandler).
+/// Totais por dia + linha do tempo, guardados na própria extensão (sobrevivem entre transmissões,
+/// atualizações e renovações do AltStore). O app recebe cópias pelo CanalDarwin.
+/// Usar sempre na mesma fila (a filaOCR do SampleHandler) — inclusive os envios, pra não
+/// misturar pacotes no mesmo canal.
 final class Diario {
-    private let chave = "diario"
+    private let chaveDias = "diario"
+    private let chaveSeq = "linhaSeq"
+    private let chaveIdCorrida = "corridaId"
+    private let limiteEventos = 1500
+
     private var dias: [Int: DiaRelatorio] = [:]
+    private var eventos: [EventoLinha] = []
     private var marcoTempo: Date?
 
+    private lazy var arquivoEventos: URL? = {
+        let pasta = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        guard let pasta else { return nil }
+        try? FileManager.default.createDirectory(at: pasta, withIntermediateDirectories: true)
+        return pasta.appendingPathComponent("linha-do-tempo.json")
+    }()
+
     init() {
-        if let dados = UserDefaults.standard.data(forKey: chave),
+        if let dados = UserDefaults.standard.data(forKey: chaveDias),
            let lista = try? JSONDecoder().decode([DiaRelatorio].self, from: dados) {
             dias = Dictionary(uniqueKeysWithValues: lista.map { ($0.dia, $0) })
+        }
+        if let url = arquivoEventos, let dados = try? Data(contentsOf: url),
+           let lista = try? JSONDecoder().decode([EventoLinha].self, from: dados) {
+            eventos = lista
         }
     }
 
@@ -22,23 +39,62 @@ final class Diario {
         Array(dias.values.sorted { $0.dia < $1.dia }.suffix(n))
     }
 
-    // MARK: Registro
+    // MARK: Totais (só o MotorCorrida chama)
 
     func contarOferta() {
         alterarHoje { $0.ofertas += 1 }
     }
 
-    func registrarCorrida(_ a: AnaliseCorrida) {
+    /// Só corrida CONFIRMADA.
+    func somarConfirmada(valorCent: Int, custoCent: Int, metros: Int) {
         alterarHoje {
             $0.corridas += 1
-            $0.faturadoCent += Int((a.oferta.valor * 100).rounded())
-            $0.custoCent += Int((a.custoEstimado * 100).rounded())
-            $0.metros += Int((a.kmTotal * 1000).rounded())
+            $0.faturadoCent += valorCent
+            $0.custoCent += custoCent
+            $0.metros += metros
+        }
+    }
+
+    /// Corrida ESTIMADA: fica separada, fora do faturamento principal.
+    func somarEstimada(valorCent: Int) {
+        alterarHoje {
+            $0.estimadas += 1
+            $0.estimadoCent += valorCent
         }
     }
 
     func zerarHoje() {
         alterarHoje { $0 = DiaRelatorio(dia: $0.dia) }
+        adicionar(EventoLinha(seq: 0, em: Date(), tipo: .diaZerado, origem: .sistema))
+    }
+
+    func novoIdCorrida() -> Int {
+        let id = UserDefaults.standard.integer(forKey: chaveIdCorrida) + 1
+        UserDefaults.standard.set(id, forKey: chaveIdCorrida)
+        return id
+    }
+
+    // MARK: Linha do tempo
+
+    /// Dá número ao evento, guarda e já manda pro app (se ele não estiver escutando, ele pede depois).
+    func adicionar(_ evento: EventoLinha) {
+        var e = evento
+        e.seq = UserDefaults.standard.integer(forKey: chaveSeq) + 1
+        UserDefaults.standard.set(e.seq, forKey: chaveSeq)
+        eventos.append(e)
+        if eventos.count > limiteEventos { eventos.removeFirst(eventos.count - limiteEventos) }
+        salvarEventos()
+        EventoLinha.canal.enviar(e.campos)
+    }
+
+    /// Eventos com seq maior que `seq`, no máximo `limite`.
+    func eventos(depois seq: Int, limite: Int = 100) -> [EventoLinha] {
+        Array(eventos.filter { $0.seq > seq }.prefix(limite))
+    }
+
+    private func salvarEventos() {
+        guard let url = arquivoEventos, let dados = try? JSONEncoder().encode(eventos) else { return }
+        try? dados.write(to: url, options: .atomic)
     }
 
     // MARK: Tempo com a leitura ligada
@@ -60,7 +116,7 @@ final class Diario {
         marcoTempo = nil
     }
 
-    // MARK: Persistência
+    // MARK: Persistência dos totais
 
     private func alterarHoje(_ mudar: (inout DiaRelatorio) -> Void) {
         var dia = hoje
@@ -74,26 +130,29 @@ final class Diario {
         let lista = ultimos(60)
         dias = Dictionary(uniqueKeysWithValues: lista.map { ($0.dia, $0) })
         if let dados = try? JSONEncoder().encode(lista) {
-            UserDefaults.standard.set(dados, forKey: chave)
+            UserDefaults.standard.set(dados, forKey: chaveDias)
         }
     }
 }
 
 /// Reconhece as telas da 99 depois do aceite, pelos textos dos botões.
+/// Os textos de fim de corrida não foram vistos na 99 Moto ainda: lista conservadora.
 enum TelaCorrida {
-    case aCaminho       // "Cheguei no local" / "Iniciar corrida": aceitou, ainda sem passageiro
-    case emViagem       // "Finalizar corrida": passageiro a bordo — conta como feita
-    case cancelada      // aviso de cancelamento
+    case aCaminho       // "Cheguei no local"
+    case embarque       // "Iniciar corrida": no local, esperando o passageiro
+    case aBordo         // "Finalizar corrida": passageiro a bordo (NÃO é fim)
+    case fim            // tela de corrida encerrada / avaliação
+    case cancelada
     case outra
 
-    /// Só vale como botão: uma linha curta que começa com o texto (ex.: "Finalizar corrida" ou
+    /// Só vale como botão/título: uma linha curta que começa com o texto (ex.: "Finalizar corrida" ou
     /// "> Finalizar corrida"), não uma frase que cita o texto no meio.
     static func identificar(_ linhas: [String]) -> TelaCorrida {
         let botoes = linhas.map(normalizar)
 
-        func temBotao(_ textos: [String]) -> Bool {
+        func temLinha(_ textos: [String], folga: Int = 12) -> Bool {
             botoes.contains { linha in
-                textos.contains { linha.hasPrefix($0) && linha.count <= $0.count + 12 }
+                textos.contains { linha.hasPrefix($0) && linha.count <= $0.count + folga }
             }
         }
 
@@ -101,10 +160,18 @@ enum TelaCorrida {
         if botoes.contains(where: { linha in linha.count <= 60 && avisosCancelamento.contains { linha.contains($0) } }) {
             return .cancelada
         }
-        if temBotao(["finalizar corrida", "finalizar viagem", "encerrar corrida"]) {
-            return .emViagem
+        if temLinha(["corrida finalizada", "viagem finalizada", "corrida concluida", "viagem concluida",
+                     "corrida encerrada", "avalie o passageiro", "avalie seu passageiro",
+                     "como foi a corrida", "como foi sua corrida", "como foi a viagem"], folga: 20) {
+            return .fim
         }
-        if temBotao(["cheguei", "iniciar corrida", "iniciar viagem"]) {
+        if temLinha(["finalizar corrida", "finalizar viagem", "encerrar corrida"]) {
+            return .aBordo
+        }
+        if temLinha(["iniciar corrida", "iniciar viagem"]) {
+            return .embarque
+        }
+        if temLinha(["cheguei"]) {
             return .aCaminho
         }
         return .outra

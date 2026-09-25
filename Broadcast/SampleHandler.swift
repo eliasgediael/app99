@@ -25,8 +25,8 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var calculadora = CalculadoraCorrida(config: ConfigMoto())   // trocada pelos ajustes do app ao iniciar
     private var avisadasEm: [String: Date] = [:]
     private let diario = Diario()
-    private var ultimaOferta: (analise: AnaliseCorrida, em: Date)?     // última oferta nova vista
-    private var corridaAceita: (analise: AnaliseCorrida, em: Date)?    // aceita, esperando "Finalizar corrida"
+    /// Único lugar que decide estado de corrida e faturamento (ver MotorCorrida).
+    private lazy var motor = MotorCorrida(diario: diario)
 
     private var appNaFrenteAte = Date.distantPast   // App 99 aberto na tela: não ler
     private var modoTeste = false                     // print de teste: avisa, mas não conta
@@ -34,6 +34,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     // Só na thread principal
     private var observadorPedido: ObservadorDarwin?
     private var observadoresApp: [ObservadorDarwin] = []
+    private var receptorPedidoLinha: ReceptorDarwin?
 
     // MARK: Ciclo da transmissão
 
@@ -46,7 +47,14 @@ class SampleHandler: RPBroadcastSampleHandler {
 
         // O app pede o relatório quando abre; respondemos com os últimos dias
         observadorPedido = ObservadorDarwin(DiaRelatorio.nomePedido) { [weak self] in self?.enviarRelatorio() }
-        filaOCR.async { self.diario.comecarTempo() }
+        // O app pede a linha do tempo a partir do último evento que tem
+        receptorPedidoLinha = ReceptorDarwin(canal: EventoLinha.canalPedido) { [weak self] campos in
+            self?.enviarEventos(depois: campos[0])
+        }
+        filaOCR.async {
+            self.diario.comecarTempo()
+            self.diario.adicionar(EventoLinha(seq: 0, em: Date(), tipo: .leituraIniciada, origem: .sistema))
+        }
         observadoresApp = SinalApp.allCases.map { sinal in
             ObservadorDarwin(sinal.nome) { [weak self] in self?.appAvisou(sinal) }
         }
@@ -64,9 +72,17 @@ class SampleHandler: RPBroadcastSampleHandler {
             case .testeFim:    self.modoTeste = false
             case .zerarHoje:
                 self.diario.zerarHoje()
-                self.ultimaOferta = nil
-                self.corridaAceita = nil
+                self.motor.esquecer()
                 DiaRelatorio.canal.enviar(self.diario.hoje.campos)
+            }
+        }
+    }
+
+    /// Manda os eventos que o app ainda não tem (até 100 por pedido; ele pede de novo se faltar).
+    private func enviarEventos(depois seq: Int) {
+        filaOCR.async {
+            for e in self.diario.eventos(depois: seq) {
+                EventoLinha.canal.enviar(e.campos)
             }
         }
     }
@@ -99,7 +115,10 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     private func ajustesChegaram() {
         let config = ConfigMoto.atual
-        filaOCR.async { self.calculadora = CalculadoraCorrida(config: config) }
+        filaOCR.async {
+            self.calculadora = CalculadoraCorrida(config: config)
+            self.motor.custoPorKm = config.custoPorKm
+        }
         SinalExtensao.ajustesRecebidos.enviar()
         enviarRelatorio()   // o app está aberto e escutando
 
@@ -113,6 +132,8 @@ class SampleHandler: RPBroadcastSampleHandler {
         SinalExtensao.terminou.enviar()
         filaOCR.sync {
             avisadasEm.removeAll()
+            motor.encerrarTudo()   // corridas abertas viram ESTIMADA/INDETERMINADA, nunca CONFIRMADA
+            diario.adicionar(EventoLinha(seq: 0, em: Date(), tipo: .leituraEncerrada, origem: .sistema))
             diario.pararTempo()
             let hoje = diario.hoje
             if hoje.corridas > 0 || hoje.ofertas > 0 {
@@ -184,57 +205,34 @@ class SampleHandler: RPBroadcastSampleHandler {
             return
         }
         SinalExtensao.leitura.enviar()
+        let agora = Date()
 
-        // Sem oferta na tela: talvez seja uma tela de corrida em andamento
-        guard let oferta = try? ParserOferta99.extrair(de: linhas) else {
-            if !modoTeste { acompanharCorrida(TelaCorrida.identificar(linhas)) }
+        if let oferta = try? ParserOferta99.extrair(de: linhas) {
+            SinalExtensao.oferta.enviar()
+            // Todo frame vai pro motor (ele precisa ver a oferta 2x pra valer). Print de teste não conta.
+            if !modoTeste { motor.observar(.oferta(oferta), em: agora) }
+
+            // Aviso imediato, sem esperar o motor: a oferta dura poucos segundos
+            guard ehNova(oferta) else { return }
+            SinalExtensao.aviso.enviar()
+            let analise = calculadora.analisar(oferta)
+            let frase = analise.fraseFalada
+            Notificador.enviar(analise)
+            Task { @MainActor in await Narrador.shared.falarSeLigado(frase) }
             return
         }
-        SinalExtensao.oferta.enviar()
 
-        guard ehNova(oferta) else { return }
-        SinalExtensao.aviso.enviar()
-
-        let analise = calculadora.analisar(oferta)
-        if !modoTeste {
-            diario.contarOferta()
-            ultimaOferta = (analise, Date())
+        guard !modoTeste else { return }
+        let tela: TelaLida
+        switch TelaCorrida.identificar(linhas) {
+        case .aCaminho:  tela = .aCaminho
+        case .embarque:  tela = .embarque
+        case .aBordo:    tela = .aBordo
+        case .fim:       tela = .fim(valorCent: ParserOferta99.maiorValorCent(em: linhas))
+        case .cancelada: tela = .cancelada
+        case .outra:     tela = .outra
         }
-
-        let frase = analise.fraseFalada
-        Notificador.enviar(analise)
-        Task { @MainActor in await Narrador.shared.falarSeLigado(frase) }
-    }
-
-    /// Oferta → "Cheguei/Iniciar corrida" (aceitou) → "Finalizar corrida" (conta como feita).
-    private func acompanharCorrida(_ tela: TelaCorrida) {
-        let agora = Date()
-        let ofertaRecente = ultimaOferta.flatMap { agora.timeIntervalSince($0.em) < 10 * 60 ? $0 : nil }
-        if let aceita = corridaAceita, agora.timeIntervalSince(aceita.em) > 3 * 3600 {
-            corridaAceita = nil   // velha demais: perdemos o fim dela
-        }
-
-        switch tela {
-        case .aCaminho:
-            // Oferta mais nova que a aceita = aceitou outra corrida
-            if let o = ofertaRecente {
-                corridaAceita = (o.analise, agora)
-                ultimaOferta = nil
-                SinalExtensao.corridaAceita.enviar()
-            }
-        case .emViagem:
-            guard let corrida = corridaAceita?.analise ?? ofertaRecente?.analise else { return }
-            diario.registrarCorrida(corrida)
-            corridaAceita = nil
-            ultimaOferta = nil
-            SinalExtensao.corridaFeita.enviar()
-            DiaRelatorio.canal.enviar(diario.hoje.campos)   // se o app estiver aberto, já atualiza
-        case .cancelada:
-            corridaAceita = nil
-            ultimaOferta = nil
-        case .outra:
-            break
-        }
+        motor.observar(tela, em: agora)
     }
 
     /// Mesma oferta (valor + distâncias) só é avisada de novo depois de 20 s.

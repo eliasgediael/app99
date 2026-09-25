@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var monitor = MonitorExtensao()
     @StateObject private var relatorio = RelatorioStore()
+    @StateObject private var linha = LinhaDoTempoStore()
     @Environment(\.scenePhase) private var fase
 
     var body: some View {
@@ -17,6 +18,16 @@ struct ContentView: View {
                 }
 
                 RelatorioSections(store: relatorio)
+
+                Section {
+                    NavigationLink {
+                        LinhaDoTempoView(store: linha)
+                    } label: {
+                        Label("Linha do tempo", systemImage: "list.bullet.rectangle")
+                    }
+                } footer: {
+                    Text("Cada oferta, aceite e mudança de estado, com o motivo de cada decisão.")
+                }
 
                 Section {
                     StatusExtensaoView(monitor: monitor)
@@ -48,11 +59,13 @@ struct ContentView: View {
         }
         .task {
             relatorio.pedir()
+            linha.pedir()
             await Notificador.pedirPermissao()
         }
         .onChange(of: fase) { nova in
             if nova == .active {
                 relatorio.pedir()   // atualiza o relatório ao voltar pro app
+                linha.pedir()
                 SinalApp.naFrente.enviar()
             } else {
                 SinalApp.saiu.enviar()
