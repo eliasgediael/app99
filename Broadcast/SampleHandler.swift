@@ -22,16 +22,23 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     // Só acessados na `filaOCR`
     private let leitor = LeitorOferta99(nivel: .fast)
-    private let calculadora = CalculadoraCorrida(config: ConfigMoto())   // valores padrão, fixos por enquanto
+    private var calculadora = CalculadoraCorrida(config: ConfigMoto())   // trocada pelos ajustes do app ao iniciar
     private var avisadasEm: [String: Date] = [:]
 
     // MARK: Ciclo da transmissão
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         SinalExtensao.iniciou.enviar()
-        // Confirma na hora se a notificação e o áudio funcionam dentro da extensão
-        Notificador.enviar("Leitura ligada. Abra a 99.")
-        Task { @MainActor in await Narrador.shared.falar("Leitor da 99 ligado.") }
+
+        // Traz os ajustes do app (valores da moto, voz) pro UserDefaults desta extensão
+        let recebeu = AjustesCompartilhados.receber()
+        if recebeu { SinalExtensao.ajustesRecebidos.enviar() }
+        filaOCR.sync { calculadora = CalculadoraCorrida(config: .atual) }
+
+        let minimo = Formato.reais(ConfigMoto.atual.minimoPorKm)
+        Notificador.enviar("Leitura ligada. Abra a 99. Mínimo \(minimo)/km"
+                           + (recebeu ? "." : " (ajustes do app não chegaram, usando o padrão)."))
+        Task { @MainActor in await Narrador.shared.falarSeLigado("Leitor da 99 ligado.") }
     }
 
     override func broadcastFinished() {
@@ -107,7 +114,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         let analise = calculadora.analisar(oferta)
         let frase = analise.fraseFalada
         Notificador.enviar(analise)
-        Task { @MainActor in await Narrador.shared.falar(frase) }
+        Task { @MainActor in await Narrador.shared.falarSeLigado(frase) }
     }
 
     /// Mesma oferta (valor + distâncias) só é avisada de novo depois de 20 s.

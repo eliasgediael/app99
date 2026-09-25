@@ -10,6 +10,7 @@ struct AjustesView: View {
     @AppStorage("bomPorKm") private var bomPorKm = padrao.bomPorKm
     @AppStorage("alertaBuscaKm") private var alertaBuscaKm = padrao.alertaBuscaKm
     @AppStorage(Narrador.chaveVelocidade) private var velocidadeFala = Narrador.velocidadePadrao
+    @AppStorage(Narrador.chaveFalar) private var falarResultado = false
 
     var body: some View {
         Form {
@@ -25,6 +26,7 @@ struct AjustesView: View {
             }
 
             Section {
+                Toggle("Falar resultado", isOn: $falarResultado)
                 VStack(alignment: .leading) {
                     Text("Velocidade: \(rotuloVelocidade)")
                     Slider(value: $velocidadeFala, in: 0.35...0.60, step: 0.01) {
@@ -42,6 +44,8 @@ struct AjustesView: View {
                 }
             } header: {
                 Text("Voz")
+            } footer: {
+                Text("Desligado: só a notificação, sem mexer na sua música.")
             }
 
             Section {
@@ -51,10 +55,13 @@ struct AjustesView: View {
                     bomPorKm = Self.padrao.bomPorKm
                     alertaBuscaKm = Self.padrao.alertaBuscaKm
                     velocidadeFala = Narrador.velocidadePadrao
+                    falarResultado = false
                 }
             }
         }
         .navigationTitle("Ajustes")
+        .onDisappear { AjustesCompartilhados.publicar() }
+        .onChange(of: falarResultado) { _ in AjustesCompartilhados.publicar() }
         .scrollDismissesKeyboard(.interactively)
     }
 

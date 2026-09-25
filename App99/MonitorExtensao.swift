@@ -46,6 +46,15 @@ struct StatusExtensaoView: View {
                 Text("desligada").foregroundStyle(.orange)
             }
         }
+        if monitor.quantos(.iniciou) > 0 {
+            LabeledContent("Seus ajustes") {
+                if monitor.quantos(.ajustesRecebidos) > 0 {
+                    Text("recebidos").foregroundStyle(.green)
+                } else {
+                    Text("não chegaram (usando padrão)").foregroundStyle(.orange)
+                }
+            }
+        }
         LabeledContent("Frames lidos", value: "\(monitor.quantos(.leitura))")
         if monitor.quantos(.falhaOCR) > 0 {
             LabeledContent("Erros de OCR", value: "\(monitor.quantos(.falhaOCR))")

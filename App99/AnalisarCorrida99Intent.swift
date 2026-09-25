@@ -27,7 +27,7 @@ struct AnalisarCorrida99Intent: AppIntent {
             Notificador.enviar(frase)
         }
 
-        await Narrador.shared.falar(frase)
+        await Narrador.shared.falarSeLigado(frase)
         return .result(value: frase)   // também sai pro Atalho, se quiser usar "Falar texto"
     }
 }

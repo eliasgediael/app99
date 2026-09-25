@@ -138,7 +138,7 @@ struct TesteView: View {
             oferta = o
             analise = a
             lendo = false
-            await Narrador.shared.falar(a.fraseFalada)
+            await Narrador.shared.falarSeLigado(a.fraseFalada)
         } catch {
             lendo = false
             erro = error.localizedDescription

@@ -15,11 +15,24 @@ final class Narrador: NSObject, AVSpeechSynthesizerDelegate {
     nonisolated static let chaveVelocidade = "velocidadeFala"
     nonisolated static let velocidadePadrao = 0.50   // 0.5 = normal do iPhone
 
-    /// Ajustável na tela de Ajustes do app (a extensão não enxerga esse ajuste e usa o padrão).
+    nonisolated static let chaveFalar = "falarResultado"
+
+    /// Ajustável na tela de Ajustes do app (chega na extensão via AjustesCompartilhados).
     var velocidade: Float {
         let d = UserDefaults.standard
         guard d.object(forKey: Self.chaveVelocidade) != nil else { return Float(Self.velocidadePadrao) }
         return Float(d.double(forKey: Self.chaveVelocidade))
+    }
+
+    /// Desligada por padrão: com música tocando, voz + 99 + música vira bagunça; a notificação basta.
+    nonisolated static var vozLigada: Bool {
+        UserDefaults.standard.bool(forKey: chaveFalar)
+    }
+
+    /// Fala só se "Falar resultado" estiver ligado nos Ajustes.
+    func falarSeLigado(_ texto: String) async {
+        guard Self.vozLigada else { return }
+        await falar(texto)
     }
 
     override init() {
