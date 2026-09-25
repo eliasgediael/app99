@@ -64,6 +64,8 @@ struct StatusExtensaoView: View {
         }
         LabeledContent("Ofertas encontradas", value: "\(monitor.quantos(.oferta))")
         LabeledContent("Avisos enviados", value: "\(monitor.quantos(.aviso))")
+        LabeledContent("Corridas aceitas / feitas",
+                       value: "\(monitor.quantos(.corridaAceita)) / \(monitor.quantos(.corridaFeita))")
         if let em = monitor.ultimoSinalEm {
             LabeledContent("Último sinal", value: em.formatted(date: .omitted, time: .standard))
         }

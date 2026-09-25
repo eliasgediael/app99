@@ -10,6 +10,8 @@ enum SinalExtensao: String, CaseIterable {
     case falhaOCR      // o Vision deu erro
     case oferta        // o parser achou uma oferta
     case aviso         // oferta nova: falou + notificou
+    case corridaAceita // viu "Cheguei no local"/"Iniciar corrida" depois de uma oferta
+    case corridaFeita  // viu "Finalizar corrida": entrou no relatório
     case terminou      // transmissão parou
 
     var nome: CFNotificationName {

@@ -29,7 +29,18 @@ enum Notificador {
         enviar(titulo: "App 99", subtitulo: nil, corpo: frase)
     }
 
-    private static func enviar(titulo: String, subtitulo: String?, corpo: String) {
+    /// 📋 Resumo de hoje
+    /// 💵 R$ 186,40 · 💰 Lucro R$ 156,65
+    /// 🛵 14 corridas · 85 km · ✅ 14 de 41 ofertas
+    static func enviarResumo(_ d: DiaRelatorio) {
+        enviar(titulo: "📋 Resumo de hoje",
+               subtitulo: nil,
+               corpo: "💵 \(Formato.reais(d.faturado)) · 💰 Lucro \(Formato.reais(d.lucro))\n"
+                    + "🛵 \(d.corridas) corrida\(d.corridas == 1 ? "" : "s") · \(Formato.km(d.km)) · ✅ \(d.corridas) de \(d.ofertas) ofertas",
+               id: "resumo99")
+    }
+
+    private static func enviar(titulo: String, subtitulo: String?, corpo: String, id: String = "oferta99") {
         let conteudo = UNMutableNotificationContent()
         conteudo.title = titulo
         if let subtitulo { conteudo.subtitle = subtitulo }
@@ -37,7 +48,7 @@ enum Notificador {
         conteudo.sound = .default
 
         // Identificador fixo: oferta nova substitui a anterior em vez de empilhar
-        let pedido = UNNotificationRequest(identifier: "oferta99", content: conteudo, trigger: nil)
+        let pedido = UNNotificationRequest(identifier: id, content: conteudo, trigger: nil)
         UNUserNotificationCenter.current().add(pedido)
     }
 }

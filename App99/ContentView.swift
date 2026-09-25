@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var monitor = MonitorExtensao()
+    @StateObject private var relatorio = RelatorioStore()
+    @Environment(\.scenePhase) private var fase
 
     var body: some View {
         NavigationStack {
@@ -13,6 +15,8 @@ struct ContentView: View {
                 } footer: {
                     Text("Toque, escolha \"App 99\" na lista e \"Iniciar Transmissão\". Depois abra a 99: cada oferta nova é falada e aparece como notificação. Pra parar, toque no indicador de gravação no topo da tela.")
                 }
+
+                RelatorioSections(store: relatorio)
 
                 Section {
                     StatusExtensaoView(monitor: monitor)
@@ -42,6 +46,12 @@ struct ContentView: View {
             }
             .navigationTitle("App 99")
         }
-        .task { await Notificador.pedirPermissao() }
+        .task {
+            relatorio.pedir()
+            await Notificador.pedirPermissao()
+        }
+        .onChange(of: fase) { nova in
+            if nova == .active { relatorio.pedir() }   // atualiza o relatório ao voltar pro app
+        }
     }
 }

@@ -24,6 +24,12 @@ class SampleHandler: RPBroadcastSampleHandler {
     private let leitor = LeitorOferta99(nivel: .fast)
     private var calculadora = CalculadoraCorrida(config: ConfigMoto())   // trocada pelos ajustes do app ao iniciar
     private var avisadasEm: [String: Date] = [:]
+    private let diario = Diario()
+    private var ultimaOferta: (analise: AnaliseCorrida, em: Date)?     // última oferta nova vista
+    private var corridaAceita: (analise: AnaliseCorrida, em: Date)?    // aceita, esperando "Finalizar corrida"
+
+    // Só na thread principal
+    private var observadorPedido: ObservadorDarwin?
 
     // MARK: Ciclo da transmissão
 
@@ -34,8 +40,22 @@ class SampleHandler: RPBroadcastSampleHandler {
         receptor.aoReceber = { [weak self] in self?.ajustesChegaram() }
         receptor.escutar()
 
+        // O app pede o relatório quando abre; respondemos com os últimos dias
+        observadorPedido = ObservadorDarwin(DiaRelatorio.nomePedido) { [weak self] in self?.enviarRelatorio() }
+        filaOCR.async { self.diario.comecarTempo() }
+
         SinalExtensao.iniciou.enviar()   // o app responde mandando os ajustes
         pedirAjustes(tentativa: 1)
+    }
+
+    /// Manda os últimos 7 dias pro app (se ele não estiver aberto, ninguém escuta e tudo bem).
+    private func enviarRelatorio() {
+        filaOCR.async {
+            self.diario.acumularTempo(forcar: true)
+            for dia in self.diario.ultimos(7) {
+                DiaRelatorio.canal.enviar(dia.campos)
+            }
+        }
     }
 
     private var ajustesRecebidos = false   // só na thread principal
@@ -58,6 +78,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         let config = ConfigMoto.atual
         filaOCR.async { self.calculadora = CalculadoraCorrida(config: config) }
         SinalExtensao.ajustesRecebidos.enviar()
+        enviarRelatorio()   // o app está aberto e escutando
 
         guard !ajustesRecebidos else { return }   // avisa só na primeira vez
         ajustesRecebidos = true
@@ -67,7 +88,17 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     override func broadcastFinished() {
         SinalExtensao.terminou.enviar()
-        filaOCR.sync { avisadasEm.removeAll() }
+        filaOCR.sync {
+            avisadasEm.removeAll()
+            diario.pararTempo()
+            let hoje = diario.hoje
+            if hoje.corridas > 0 || hoje.ofertas > 0 {
+                Notificador.enviarResumo(hoje)
+            }
+            for dia in diario.ultimos(7) {
+                DiaRelatorio.canal.enviar(dia.campos)
+            }
+        }
     }
 
     // MARK: Frames
@@ -127,18 +158,56 @@ class SampleHandler: RPBroadcastSampleHandler {
             return
         }
         SinalExtensao.leitura.enviar()
+        diario.acumularTempo()
 
-        // A maioria dos frames não tem oferta — silêncio
-        guard let oferta = try? ParserOferta99.extrair(de: linhas) else { return }
+        // Sem oferta na tela: talvez seja uma tela de corrida em andamento
+        guard let oferta = try? ParserOferta99.extrair(de: linhas) else {
+            acompanharCorrida(TelaCorrida.identificar(linhas))
+            return
+        }
         SinalExtensao.oferta.enviar()
 
         guard ehNova(oferta) else { return }
         SinalExtensao.aviso.enviar()
 
         let analise = calculadora.analisar(oferta)
+        diario.contarOferta()
+        ultimaOferta = (analise, Date())
+
         let frase = analise.fraseFalada
         Notificador.enviar(analise)
         Task { @MainActor in await Narrador.shared.falarSeLigado(frase) }
+    }
+
+    /// Oferta → "Cheguei/Iniciar corrida" (aceitou) → "Finalizar corrida" (conta como feita).
+    private func acompanharCorrida(_ tela: TelaCorrida) {
+        let agora = Date()
+        let ofertaRecente = ultimaOferta.flatMap { agora.timeIntervalSince($0.em) < 10 * 60 ? $0 : nil }
+        if let aceita = corridaAceita, agora.timeIntervalSince(aceita.em) > 3 * 3600 {
+            corridaAceita = nil   // velha demais: perdemos o fim dela
+        }
+
+        switch tela {
+        case .aCaminho:
+            // Oferta mais nova que a aceita = aceitou outra corrida
+            if let o = ofertaRecente {
+                corridaAceita = (o.analise, agora)
+                ultimaOferta = nil
+                SinalExtensao.corridaAceita.enviar()
+            }
+        case .emViagem:
+            guard let corrida = corridaAceita?.analise ?? ofertaRecente?.analise else { return }
+            diario.registrarCorrida(corrida)
+            corridaAceita = nil
+            ultimaOferta = nil
+            SinalExtensao.corridaFeita.enviar()
+            DiaRelatorio.canal.enviar(diario.hoje.campos)   // se o app estiver aberto, já atualiza
+        case .cancelada:
+            corridaAceita = nil
+            ultimaOferta = nil
+        case .outra:
+            break
+        }
     }
 
     /// Mesma oferta (valor + distâncias) só é avisada de novo depois de 20 s.
