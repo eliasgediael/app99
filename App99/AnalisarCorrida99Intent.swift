@@ -8,7 +8,8 @@ struct AnalisarCorrida99Intent: AppIntent {
     static let description = IntentDescription("Lê o print da oferta da 99 e fala se a corrida compensa.")
     static let openAppWhenRun = false
 
-    @Parameter(title: "Captura de tela", supportedContentTypes: [.image])
+    // `supportedContentTypes:` só existe a partir do iOS 18; esta forma funciona no 16+
+    @Parameter(title: "Captura de tela", supportedTypeIdentifiers: [UTType.image.identifier])
     var captura: IntentFile
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
