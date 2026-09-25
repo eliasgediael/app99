@@ -4,7 +4,9 @@ import SwiftUI
 /// A extensão numera os eventos; o app pede "tudo depois do último que tenho sem buraco".
 @MainActor
 final class LinhaDoTempoStore: ObservableObject {
-    @Published private(set) var eventos: [EventoLinha] = []   // em ordem de seq
+    static let shared = LinhaDoTempoStore()
+
+    @Published private(set) var eventos: [EventoLinha] = []   // em ordem de seq (os do app, negativos, primeiro)
 
     private let retencao: TimeInterval = 90 * 86_400
     private var seqs: Set<Int> = []
@@ -28,9 +30,18 @@ final class LinhaDoTempoStore: ObservableObject {
         }
     }
 
+    /// Evento criado no app (turno, custo, GPS). Seq negativo: nunca se mistura com os da extensão.
+    func adicionarLocal(_ evento: EventoLinha) {
+        var e = evento
+        let proximo = UserDefaults.standard.integer(forKey: "linhaSeqApp") - 1
+        UserDefaults.standard.set(proximo, forKey: "linhaSeqApp")
+        e.seq = proximo
+        guardar(e)
+    }
+
     /// Maior seq tal que não falta nenhum antes dele (a partir do primeiro que temos).
     private var contiguo: Int {
-        guard var n = eventos.first?.seq else { return 0 }
+        guard var n = eventos.first(where: { !$0.doApp })?.seq else { return 0 }
         while seqs.contains(n + 1) { n += 1 }
         return n
     }
@@ -43,16 +54,9 @@ final class LinhaDoTempoStore: ObservableObject {
 
     private func receber(_ e: EventoLinha) {
         guard !seqs.contains(e.seq) else { return }
-        seqs.insert(e.seq)
-        eventos.append(e)
-        eventos.sort { $0.seq < $1.seq }
-
-        let limite = Int(Date().timeIntervalSince1970 - retencao)
-        if let primeiro = eventos.first, primeiro.em < limite {
-            eventos.removeAll { $0.em < limite }
-            seqs = Set(eventos.map(\.seq))
-        }
-        salvar()
+        var e = e
+        TurnoStore.shared.enriquecer(&e)   // local e km do turno no momento (quando houver GPS)
+        guardar(e)
 
         // A extensão manda até 100 por pedido: se avançou, pede a próxima página
         repedir?.cancel()
@@ -61,6 +65,19 @@ final class LinhaDoTempoStore: ObservableObject {
             guard let self, !Task.isCancelled, self.contiguo != self.ultimoPedido else { return }
             self.pedir()
         }
+    }
+
+    private func guardar(_ e: EventoLinha) {
+        seqs.insert(e.seq)
+        eventos.append(e)
+        eventos.sort { $0.seq < $1.seq }
+
+        let limite = Int(Date().timeIntervalSince1970 - retencao)
+        if eventos.contains(where: { $0.em < limite }) {
+            eventos.removeAll { $0.em < limite }
+            seqs = Set(eventos.map(\.seq))
+        }
+        salvar()
     }
 
     private func salvar() {
@@ -76,7 +93,7 @@ struct LinhaDoTempoView: View {
 
     private var porDia: [(dia: Int, eventos: [EventoLinha])] {
         Dictionary(grouping: store.eventos, by: \.dia)
-            .map { ($0.key, $0.value.sorted { $0.seq > $1.seq }) }
+            .map { ($0.key, $0.value.sorted { ($0.em, $0.seq) > ($1.em, $1.seq) }) }   // mais novo primeiro
             .sorted { $0.dia > $1.dia }
     }
 
@@ -116,6 +133,7 @@ private struct LinhaEventoView: View {
                 .foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
+                    Image(systemName: icone.nome).font(.caption).foregroundStyle(icone.cor)
                     Text(titulo).font(.subheadline.bold())
                     if evento.corrida > 0 {
                         Text("#\(evento.corrida)").font(.caption).foregroundStyle(.secondary)
@@ -145,7 +163,21 @@ private struct LinhaEventoView: View {
         return evento.tipo.nome
     }
 
+    private var icone: (nome: String, cor: Color) {
+        switch evento.tipo {
+        case .ofertaDetectada, .ofertaSaiuDaTela:                   return ("tag", .blue)
+        case .faturamentoConfirmado:                                return ("checkmark.seal.fill", .green)
+        case .faturamentoEstimado:                                  return ("questionmark.circle", .orange)
+        case .custoRegistrado:                                      return ("fuelpump", .purple)
+        case .turnoIniciado, .turnoEncerrado, .turnoPausado, .turnoRetomado: return ("flag", .purple)
+        case .gpsSemSinal, .gpsRetomado:                            return ("location", .gray)
+        case .leituraIniciada, .leituraEncerrada, .diaZerado:       return ("record.circle", .gray)
+        default:                                                    return ("circle.fill", .secondary)
+        }
+    }
+
     private var dados: String? {
+        if let t = evento.texto { return t }
         var partes: [String] = []
         if evento.valorCent > 0 { partes.append(Formato.reais(Double(evento.valorCent) / 100)) }
         if evento.buscaM > 0 || evento.viagemM > 0 {

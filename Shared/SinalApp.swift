@@ -11,6 +11,8 @@ enum SinalApp: String, CaseIterable {
     case testeFim
     /// Apaga os números de hoje (ex.: depois de testes).
     case zerarHoje
+    /// Turno encerrado no app: a extensão para a transmissão.
+    case encerrarLeitura
 
     var nome: String { "com.elias.app99.app.\(rawValue)" }
 

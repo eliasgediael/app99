@@ -74,6 +74,11 @@ class SampleHandler: RPBroadcastSampleHandler {
                 self.diario.zerarHoje()
                 self.motor.esquecer()
                 DiaRelatorio.canal.enviar(self.diario.hoje.campos)
+            case .encerrarLeitura:
+                // broadcastFinished() roda em seguida e fecha as corridas abertas
+                let motivo = NSError(domain: "App99", code: 1,
+                                     userInfo: [NSLocalizedDescriptionKey: "Turno encerrado no App 99."])
+                DispatchQueue.main.async { self.finishBroadcastWithError(motivo) }
             }
         }
     }

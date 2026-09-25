@@ -8,6 +8,7 @@ final class Diario {
     private let chaveDias = "diario"
     private let chaveSeq = "linhaSeq"
     private let chaveIdCorrida = "corridaId"
+    private let chaveIdOferta = "ofertaId"
     private let limiteEventos = 1500
 
     private var dias: [Int: DiaRelatorio] = [:]
@@ -66,6 +67,12 @@ final class Diario {
     func zerarHoje() {
         alterarHoje { $0 = DiaRelatorio(dia: $0.dia) }
         adicionar(EventoLinha(seq: 0, em: Date(), tipo: .diaZerado, origem: .sistema))
+    }
+
+    func novoIdOferta() -> Int {
+        let id = UserDefaults.standard.integer(forKey: chaveIdOferta) + 1
+        UserDefaults.standard.set(id, forKey: chaveIdOferta)
+        return id
     }
 
     func novoIdCorrida() -> Int {

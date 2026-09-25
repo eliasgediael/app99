@@ -52,7 +52,7 @@ final class SeletorTransmissao {
     }
 }
 
-private struct SeletorView: UIViewRepresentable {
+struct SeletorView: UIViewRepresentable {
     let picker: RPSystemBroadcastPickerView
 
     func makeUIView(context: Context) -> RPSystemBroadcastPickerView { picker }

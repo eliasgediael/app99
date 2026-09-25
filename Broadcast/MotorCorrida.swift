@@ -44,6 +44,8 @@ final class MotorCorrida {
         let criadaEm: Date
         var ultimaTela: Date
         var oferta: OfertaCorrida?
+        var ofertaId = 0
+        var ligacaoConfirmada = false    // aceite até 10 s depois da oferta sair da tela
         var aceite: Bool
         var aBordo = false
         var fim = false
@@ -53,6 +55,7 @@ final class MotorCorrida {
 
     private struct OfertaVista {
         let oferta: OfertaCorrida
+        let id: Int
         let chave: String
         let primeiraVez: Date
         var saiuEm: Date?
@@ -65,13 +68,14 @@ final class MotorCorrida {
     private var abertas: [Corrida] = []
     private var ultimaOferta: OfertaVista?
     private var chavesAlheias: Set<String> = []           // ofertas lidas depois da última confirmada
-    private var registradasEm: [String: Date] = [:]       // não repetir OFERTA_DETECTADA por 20 s
+    private var registradasEm: [String: (em: Date, id: Int)] = [:]   // não repetir OFERTA_DETECTADA por 20 s
 
     private var classeAtual = "outra"
     private var candidata: (classe: String, tela: TelaLida, primeira: Date)?
 
     private let janelaDebounce: TimeInterval = 3
     private let janelaAceite: TimeInterval = 60
+    private let janelaAceiteConfirmado: TimeInterval = 10
     private let limiteCorridaAberta: TimeInterval = 3 * 3600
 
     init(diario: Diario) {
@@ -135,7 +139,7 @@ final class MotorCorrida {
             switch tela {
             case .aCaminho, .embarque: break   // o aceite registra
             default:
-                evento(.ofertaSaiuDaTela, .tela, em: agora, motivo: .ofertaSaiuSemAceite, oferta: ov.oferta)
+                evento(.ofertaSaiuDaTela, .tela, em: agora, motivo: .ofertaSaiuSemAceite, oferta: ov.oferta, ofertaId: ov.id)
             }
         }
 
@@ -152,14 +156,23 @@ final class MotorCorrida {
 
     private func ofertaNaTela(_ o: OfertaCorrida, em agora: Date) {
         let chave = Self.chave(o)
-        ultimaOferta = OfertaVista(oferta: o, chave: chave, primeiraVez: agora)
+        registradasEm = registradasEm.filter { agora.timeIntervalSince($0.value.em) < 20 }
+        // Mesma oferta voltando pra tela em menos de 20 s: mesmo id, sem novo evento
+        if let ja = registradasEm[chave] {
+            ultimaOferta = OfertaVista(oferta: o, id: ja.id, chave: chave, primeiraVez: agora)
+            chavesAlheias = []
+            return
+        }
+        let id = diario.novoIdOferta()
+        registradasEm[chave] = (agora, id)
+        ultimaOferta = OfertaVista(oferta: o, id: id, chave: chave, primeiraVez: agora)
         chavesAlheias = []
-
-        registradasEm = registradasEm.filter { agora.timeIntervalSince($0.value) < 20 }
-        guard registradasEm[chave] == nil else { return }
-        registradasEm[chave] = agora
         diario.contarOferta()
-        evento(.ofertaDetectada, .tela, em: agora, motivo: .lidoNaTela, oferta: o)
+        var minutos = 0
+        if o.minAtePassageiro != nil || o.minViagem != nil {
+            minutos = (o.minAtePassageiro ?? 0) * 1000 + (o.minViagem ?? 0)
+        }
+        evento(.ofertaDetectada, .tela, em: agora, motivo: .lidoNaTela, oferta: o, ofertaId: id, minutos: minutos)
     }
 
     private func telaDeAceite(embarque: Bool, em agora: Date) {
@@ -180,7 +193,8 @@ final class MotorCorrida {
         }
 
         // Novo aceite: tenta ligar à oferta
-        var ligada: OfertaCorrida?
+        var ligada: OfertaVista?
+        var confirmada = false
         var motivo = MotivoEvento.aceiteSemOferta
         var segundos = 0
         if let ov = ultimaOferta {
@@ -188,8 +202,9 @@ final class MotorCorrida {
             segundos = Int(agora.timeIntervalSince(saiu))
             if agora.timeIntervalSince(saiu) <= janelaAceite {
                 if chavesAlheias.isEmpty {
-                    ligada = ov.oferta
-                    motivo = .ofertaLigadaAoAceite
+                    ligada = ov
+                    confirmada = agora.timeIntervalSince(saiu) <= janelaAceiteConfirmado
+                    motivo = confirmada ? .ofertaLigadaAoAceite : .ofertaLigadaFraca
                 } else {
                     motivo = .aceiteOfertaAmbigua
                 }
@@ -199,9 +214,11 @@ final class MotorCorrida {
         chavesAlheias = []
 
         let id = diario.novoIdCorrida()
-        var c = Corrida(id: id, estado: .aceita, criadaEm: agora, ultimaTela: agora, oferta: ligada, aceite: true)
+        var c = Corrida(id: id, estado: .aceita, criadaEm: agora, ultimaTela: agora, oferta: ligada?.oferta,
+                        ofertaId: ligada?.id ?? 0, ligacaoConfirmada: confirmada, aceite: true)
         evento(.aceiteDetectado, .tela, em: agora, corrida: id, para: .aceita,
-               motivo: motivo, extra: motivo == .ofertaLigadaAoAceite ? segundos : 0, oferta: ligada)
+               confianca: ligada == nil ? .indeterminado : (confirmada ? .confirmado : .estimado),
+               motivo: motivo, extra: ligada != nil ? segundos : 0, oferta: ligada?.oferta, ofertaId: ligada?.id ?? 0)
         evento(.transicao, .tela, em: agora, corrida: id, de: .aceita, para: .aCaminho, motivo: .lidoNaTela)
         c.estado = .aCaminho
         if embarque {
@@ -280,10 +297,13 @@ final class MotorCorrida {
     /// Classifica pela evidência e só aí mexe em dinheiro. `porque` = motivo de fechar sem tela de fim.
     private func encerrar(_ c: Corrida, em agora: Date, porque: MotivoEvento?) {
         let valorCent = c.valorFinalCent ?? c.oferta.map { Int(($0.valor * 100).rounded()) }
+        // Valor confirmado = lido na tela de fim, ou oferta ligada ao aceite com associação confirmada
+        let valorConfirmado = c.valorFinalCent != nil || (c.oferta != nil && c.ligacaoConfirmada)
 
         var falta = 0
         if !c.aceite { falta |= Falta.aceite }
         if valorCent == nil { falta |= Falta.valor }
+        else if !valorConfirmado { falta |= Falta.ligacao }
         if !c.aBordo { falta |= Falta.aBordo }
         if !c.fim { falta |= Falta.fim }
 
@@ -299,7 +319,7 @@ final class MotorCorrida {
 
         let motivo = porque ?? (falta == 0 ? .evidenciaCompleta : .evidenciaIncompleta)
         evento(.transicao, .inferencia, em: agora, corrida: c.id, de: c.estado, para: final,
-               confianca: confianca, motivo: motivo, extra: falta, oferta: c.oferta)
+               confianca: confianca, motivo: motivo, extra: falta, oferta: c.oferta, ofertaId: c.ofertaId)
 
         switch final {
         case .confirmada:
@@ -325,8 +345,10 @@ final class MotorCorrida {
     private func evento(_ tipo: TipoEvento, _ origem: OrigemEvento, em agora: Date,
                         corrida: Int = 0, de: EstadoCorrida? = nil, para: EstadoCorrida? = nil,
                         confianca: Confianca? = nil, motivo: MotivoEvento = .nenhum, extra: Int = 0,
-                        oferta: OfertaCorrida? = nil, valorCent: Int = 0) {
+                        oferta: OfertaCorrida? = nil, ofertaId: Int = 0, minutos: Int = 0, valorCent: Int = 0) {
         var e = EventoLinha(seq: 0, em: agora, tipo: tipo, origem: origem)
+        e.oferta = ofertaId
+        e.minutos = minutos
         e.corrida = corrida
         e.estadoAnterior = de
         e.estadoNovo = para

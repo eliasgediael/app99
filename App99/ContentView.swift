@@ -3,16 +3,18 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var monitor = MonitorExtensao()
     @StateObject private var relatorio = RelatorioStore()
-    @StateObject private var linha = LinhaDoTempoStore()
+    @ObservedObject private var linha = LinhaDoTempoStore.shared   // um só, compartilhado com o turno
     @Environment(\.scenePhase) private var fase
 
     var body: some View {
         NavigationStack {
             List {
+                PainelTurno(monitor: monitor)
+
                 Section {
                     BotaoIniciarLeitura()
                 } header: {
-                    Text("Leitura automática")
+                    Text("Só a leitura (sem turno)")
                 } footer: {
                     Text("Toque, escolha \"App 99\" na lista e \"Iniciar Transmissão\". Depois abra a 99: cada oferta nova é falada e aparece como notificação. Pra parar, toque no indicador de gravação no topo da tela.")
                 }
