@@ -9,7 +9,7 @@ struct AnalisarCorrida99Intent: AppIntent {
     static let openAppWhenRun = false
 
     // `supportedContentTypes:` só existe a partir do iOS 18; esta forma funciona no 16+
-    @Parameter(title: "Captura de tela", supportedTypeIdentifiers: [UTType.image.identifier])
+    @Parameter(title: "Captura de tela", supportedTypeIdentifiers: ["public.image"])
     var captura: IntentFile
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
