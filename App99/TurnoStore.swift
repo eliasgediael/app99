@@ -9,8 +9,10 @@ final class TurnoStore: ObservableObject {
     @Published private(set) var turnos: [Turno] = []
     @Published private(set) var custos: [Custo] = []
 
-    /// Pontos de GPS do turno atual (a coleta entra na Fase 3; vazio até lá).
+    /// Pontos de GPS do turno atual (os antigos ficam em gps-<id>.json).
     private(set) var pontosAtuais: [PontoGPS] = []
+    private var pontosSalvosEm = Date.distantPast
+    private let retencaoGPS: TimeInterval = 90 * 86_400
 
     private let pasta: URL? = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
 
@@ -21,6 +23,7 @@ final class TurnoStore: ObservableObject {
         turnos = carregar("turnos.json") ?? []
         custos = carregar("custos.json") ?? []
         if let t = atual { pontosAtuais = pontos(de: t) }
+        apagarGPSAntigo()
     }
 
     // MARK: Turno
@@ -31,7 +34,9 @@ final class TurnoStore: ObservableObject {
         let t = Turno(id: UUID(), inicio: agora)
         turnos.append(t)
         salvarTurnos()
+        pontosAtuais = []
         registrar(.turnoIniciado, em: agora, texto: "Turno iniciado", ref: t.id.uuidString)
+        Localizacao.shared.ligar()
         return t
     }
 
@@ -52,10 +57,12 @@ final class TurnoStore: ObservableObject {
     @discardableResult
     func encerrar(em agora: Date = Date()) -> Turno? {
         guard let i = indiceAtual else { return nil }
+        salvarPontos()   // antes de marcar o fim (depois disso o turno não é mais o atual)
         if turnos[i].pausadoAgora { turnos[i].pausas[turnos[i].pausas.count - 1].fim = agora }
         turnos[i].fim = agora
         salvarTurnos()
         registrar(.turnoEncerrado, em: agora, texto: "Turno encerrado", ref: turnos[i].id.uuidString)
+        Localizacao.shared.desligar()   // salva os pontos
         pontosAtuais = []
         return turnos[i]
     }
@@ -89,7 +96,41 @@ final class TurnoStore: ObservableObject {
                               custoPorKm: ConfigMoto.atual.custoPorKm, agora: agora)
     }
 
-    // MARK: GPS (preparado pra Fase 3)
+    // MARK: GPS
+
+    /// Guarda 1 ponto a cada 10 m andados ou 15 s parado (o bastante pra ver buracos de sinal).
+    func adicionarPonto(_ p: PontoGPS) {
+        guard let t = atual, t.contem(p.em) else { return }
+        if let u = pontosAtuais.last {
+            guard p.em > u.em else { return }
+            if p.em.timeIntervalSince(u.em) < 15 && u.coord.distancia(ate: p.coord) < 10 { return }
+        }
+        pontosAtuais.append(p)
+        if Date().timeIntervalSince(pontosSalvosEm) > 60 { salvarPontos() }
+    }
+
+    func salvarPontos() {
+        guard let t = atual else { return }
+        salvar(pontosAtuais, "gps-\(t.id.uuidString).json")
+        pontosSalvosEm = Date()
+    }
+
+    func registrarGPS(_ tipo: TipoEvento, texto: String) {
+        guard atual != nil else { return }
+        var e = EventoLinha(seq: 0, em: Date(), tipo: tipo, origem: .gps)
+        e.texto = texto
+        LinhaDoTempoStore.shared.adicionarLocal(e)
+    }
+
+    /// Privacidade: trajetos com mais de 90 dias são apagados (os totais do turno continuam).
+    private func apagarGPSAntigo() {
+        let limite = Date().addingTimeInterval(-retencaoGPS)
+        for t in turnos where (t.fim ?? Date()) < limite {
+            if let url = pasta?.appendingPathComponent("gps-\(t.id.uuidString).json") {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+    }
 
     /// Chamado a cada evento que chega da leitura: marca onde você estava e o km do turno naquele momento.
     func enriquecer(_ e: inout EventoLinha) {

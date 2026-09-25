@@ -60,6 +60,7 @@ struct ContentView: View {
             .navigationTitle("App 99")
         }
         .task {
+            if TurnoStore.shared.atual != nil { Localizacao.shared.ligar() }
             relatorio.pedir()
             linha.pedir()
             await Notificador.pedirPermissao()

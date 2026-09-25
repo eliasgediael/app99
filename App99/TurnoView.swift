@@ -6,6 +6,7 @@ struct PainelTurno: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared
     @ObservedObject var monitor: MonitorExtensao
+    @ObservedObject var gps = Localizacao.shared
 
     @State private var seletor = SeletorTransmissao()
     @State private var confirmarEncerrar = false
@@ -72,7 +73,7 @@ struct PainelTurno: View {
                     .foregroundStyle(t.pausadoAgora ? Color.orange : Color.green)
                 Spacer()
                 indicador("Leitura", ligado: monitor.ligada)
-                indicador("GPS", ligado: r.temGPS)
+                indicador("GPS", ligado: gps.estado == .ativo)
             }
 
             NumeroDestaque(valor: Formato.reais(r.faturamentoConfirmado.valor ?? 0),
@@ -96,6 +97,13 @@ struct PainelTurno: View {
                 Text("\(r.corridasConfirmadas) corridas · \(Duracao.curta(r.tempoPorEstado[.aguardando] ?? 0)) aguardando")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            if gps.estado == .semPermissao || gps.estado == .semSinal {
+                Text(gps.estado == .semPermissao
+                     ? "Sem permissão de localização: km e R$/km ficam em branco. Ative em Ajustes → App 99 → Localização."
+                     : "GPS sem sinal: esse trecho não entra nos km.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
             if r.corridasEstimadas > 0 {
                 Text("+ \(r.corridasEstimadas) estimada\(r.corridasEstimadas == 1 ? "" : "s") (≈ \(Formato.reais(r.faturamentoEstimado.valor ?? 0))) fora do total")
@@ -202,7 +210,14 @@ struct ResumoTurnoView: View {
 
             Section("Corridas e ofertas") {
                 LabeledContent("Confirmadas", value: "\(r.corridasConfirmadas)")
-                if r.corridasEstimadas > 0 { LabeledContent("Estimadas", value: "\(r.corridasEstimadas)") }
+                if gps.estado == .semPermissao || gps.estado == .semSinal {
+                Text(gps.estado == .semPermissao
+                     ? "Sem permissão de localização: km e R$/km ficam em branco. Ative em Ajustes → App 99 → Localização."
+                     : "GPS sem sinal: esse trecho não entra nos km.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+            if r.corridasEstimadas > 0 { LabeledContent("Estimadas", value: "\(r.corridasEstimadas)") }
                 if r.corridasIndeterminadas > 0 { LabeledContent("Indeterminadas", value: "\(r.corridasIndeterminadas)") }
                 LabeledContent("Ofertas", value: "\(r.ofertas.count)")
                 LabeledContent("Ofertas aceitas", value: "\(r.ofertas.filter { $0.resultado == .aceita }.count)")
