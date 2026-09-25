@@ -170,8 +170,7 @@ enum ParserOferta99 {
 
     /// Maior valor em R$ da tela, em centavos (ex.: valor final na tela de fim de corrida).
     static func maiorValorCent(em linhas: [String]) -> Int? {
-        capturas(regexValor, em: linhas.joined(separator: "
-")).compactMap(converterReais).max()
+        capturas(regexValor, em: linhas.joined(separator: "\n")).compactMap(converterReais).max()
             .map { Int(($0 * 100).rounded()) }
     }
 
