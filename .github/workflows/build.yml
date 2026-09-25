@@ -41,6 +41,11 @@ jobs:
         run: |
           APP=build/Build/Products/Release-iphoneos/App99.app
           test -d "$APP/PlugIns/Broadcast.appex" || { echo "Extensão não foi embutida"; exit 1; }
+          # Assinatura ad-hoc (de dentro pra fora) só pra deixar uma assinatura válida e completa
+          # que o Sideloadly substitui; sem isso a extensão morria com CODESIGNING "Invalid Page".
+          codesign --force --sign - --timestamp=none "$APP/PlugIns/Broadcast.appex"
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
           mkdir Payload
           cp -R "$APP" Payload/
           zip -qry App99.ipa Payload

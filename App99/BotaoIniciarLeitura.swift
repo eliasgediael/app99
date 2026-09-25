@@ -27,7 +27,15 @@ struct BotaoIniciarLeitura: View {
 
 @MainActor
 final class SeletorTransmissao {
-    static let idExtensao = "com.elias.app99.broadcast"
+    /// Lê o ID de dentro do .appex instalado: o Sideloadly pode trocar os IDs
+    /// (ex.: com.elias.app99.XXXXXXXXXX.broadcast), e aí o fixo não casaria.
+    static let idExtensao: String = {
+        if let url = Bundle.main.builtInPlugInsURL?.appendingPathComponent("Broadcast.appex"),
+           let id = Bundle(url: url)?.bundleIdentifier {
+            return id
+        }
+        return "com.elias.app99.broadcast"
+    }()
 
     let picker: RPSystemBroadcastPickerView = {
         let p = RPSystemBroadcastPickerView(frame: CGRect(x: 0, y: 0, width: 44, height: 44))
