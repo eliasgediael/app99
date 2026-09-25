@@ -174,8 +174,27 @@ struct ResumoTurnoView: View {
     @Environment(\.dismiss) private var fechar
 
     var body: some View {
-        let r = turnos.resumo(turno)
+        conteudo(turnos.resumo(turno))
+            .navigationTitle("Resumo do turno")
+            .toolbar { Button("OK") { fechar() } }
+    }
+
+    private func conteudo(_ r: ResumoTurno) -> some View {
         List {
+            principais(r)
+            financeiro(r)
+            tempo(r)
+            corridas(r)
+            custos(r)
+            Section {
+                NavigationLink("Linha do tempo") { LinhaDoTempoView(store: linha) }
+            } footer: {
+                Text("Só corridas CONFIRMADAS entram no faturamento. Toque num número pra ver de onde ele vem.")
+            }
+        }
+    }
+
+    private func principais(_ r: ResumoTurno) -> some View {
             Section {
                 NumeroDestaque(valor: Formato.reais(r.faturamentoConfirmado.valor ?? 0),
                                rotulo: "faturamento confirmado", grande: true)
@@ -187,7 +206,9 @@ struct ResumoTurnoView: View {
             } header: {
                 Text("\(Datas.curta(turno.inicio)) · \(Self.hora(turno.inicio))–\(turno.fim.map(Self.hora) ?? "agora")")
             }
+    }
 
+    private func financeiro(_ r: ResumoTurno) -> some View {
             Section("Financeiro") {
                 campo("Confirmado", r.faturamentoConfirmado) { Formato.reais($0) }
                 campo("Estimado (fora do total)", r.faturamentoEstimado) { Formato.reais($0) }
@@ -197,7 +218,9 @@ struct ResumoTurnoView: View {
                 campo("Média por corrida", r.mediaPorCorrida) { Formato.reais($0) }
                 campo("R$/hora ativo", r.porHoraAtivo) { Formato.reais($0) }
             }
+    }
 
+    private func tempo(_ r: ResumoTurno) -> some View {
             Section("Tempo") {
                 ForEach(EstadoMotorista.allCases, id: \.self) { e in
                     if let s = r.tempoPorEstado[e], s >= 60 {
@@ -207,36 +230,25 @@ struct ResumoTurnoView: View {
                     }
                 }
             }
+    }
 
+    private func corridas(_ r: ResumoTurno) -> some View {
             Section("Corridas e ofertas") {
                 LabeledContent("Confirmadas", value: "\(r.corridasConfirmadas)")
-                if gps.estado == .semPermissao || gps.estado == .semSinal {
-                Text(gps.estado == .semPermissao
-                     ? "Sem permissão de localização: km e R$/km ficam em branco. Ative em Ajustes → App 99 → Localização."
-                     : "GPS sem sinal: esse trecho não entra nos km.")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-            if r.corridasEstimadas > 0 { LabeledContent("Estimadas", value: "\(r.corridasEstimadas)") }
+                if r.corridasEstimadas > 0 { LabeledContent("Estimadas", value: "\(r.corridasEstimadas)") }
                 if r.corridasIndeterminadas > 0 { LabeledContent("Indeterminadas", value: "\(r.corridasIndeterminadas)") }
                 LabeledContent("Ofertas", value: "\(r.ofertas.count)")
                 LabeledContent("Ofertas aceitas", value: "\(r.ofertas.filter { $0.resultado == .aceita }.count)")
             }
+    }
 
-            if !r.custos.isEmpty {
-                Section("Abastecimentos e custos") {
-                    ForEach(r.custos) { c in Text(c.resumo) }
-                }
-            }
-
-            Section {
-                NavigationLink("Linha do tempo") { LinhaDoTempoView(store: linha) }
-            } footer: {
-                Text("Só corridas CONFIRMADAS entram no faturamento. Toque num número pra ver de onde ele vem. Distância e R$/km dependem do GPS (próxima etapa).")
+    @ViewBuilder
+    private func custos(_ r: ResumoTurno) -> some View {
+        if !r.custos.isEmpty {
+            Section("Abastecimentos e custos") {
+                ForEach(r.custos) { c in Text(c.resumo) }
             }
         }
-        .navigationTitle("Resumo do turno")
-        .toolbar { Button("OK") { fechar() } }
     }
 
     private func campo(_ titulo: String, _ m: Medida, _ f: @escaping (Double) -> String) -> some View {
