@@ -37,6 +37,10 @@ final class Diario {
         }
     }
 
+    func zerarHoje() {
+        alterarHoje { $0 = DiaRelatorio(dia: $0.dia) }
+    }
+
     // MARK: Tempo com a leitura ligada
 
     func comecarTempo() { marcoTempo = Date() }
@@ -82,19 +86,36 @@ enum TelaCorrida {
     case cancelada      // aviso de cancelamento
     case outra
 
+    /// Só vale como botão: uma linha curta que começa com o texto (ex.: "Finalizar corrida" ou
+    /// "> Finalizar corrida"), não uma frase que cita o texto no meio.
     static func identificar(_ linhas: [String]) -> TelaCorrida {
-        let texto = linhas.joined(separator: " ")
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "pt_BR"))
+        let botoes = linhas.map(normalizar)
 
-        if texto.contains("cancelou") || texto.contains("corrida cancelada") || texto.contains("viagem cancelada") {
+        func temBotao(_ textos: [String]) -> Bool {
+            botoes.contains { linha in
+                textos.contains { linha.hasPrefix($0) && linha.count <= $0.count + 12 }
+            }
+        }
+
+        let avisosCancelamento = ["cancelou", "corrida cancelada", "viagem cancelada"]
+        if botoes.contains(where: { linha in linha.count <= 60 && avisosCancelamento.contains { linha.contains($0) } }) {
             return .cancelada
         }
-        if texto.contains("finalizar corrida") || texto.contains("finalizar viagem") || texto.contains("encerrar corrida") {
+        if temBotao(["finalizar corrida", "finalizar viagem", "encerrar corrida"]) {
             return .emViagem
         }
-        if texto.contains("cheguei") || texto.contains("iniciar corrida") || texto.contains("iniciar viagem") {
+        if temBotao(["cheguei", "iniciar corrida", "iniciar viagem"]) {
             return .aCaminho
         }
         return .outra
+    }
+
+    /// Minúsculas, sem acento, só letras/números/espaços, sem espaço nas pontas.
+    private static func normalizar(_ s: String) -> String {
+        let dobrado = s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "pt_BR"))
+        let limpo = String(dobrado.unicodeScalars.map {
+            CharacterSet.alphanumerics.contains($0) ? Character($0) : " "
+        })
+        return limpo.split(separator: " ").joined(separator: " ")
     }
 }

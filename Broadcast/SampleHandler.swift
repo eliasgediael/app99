@@ -28,8 +28,12 @@ class SampleHandler: RPBroadcastSampleHandler {
     private var ultimaOferta: (analise: AnaliseCorrida, em: Date)?     // última oferta nova vista
     private var corridaAceita: (analise: AnaliseCorrida, em: Date)?    // aceita, esperando "Finalizar corrida"
 
+    private var appNaFrenteAte = Date.distantPast   // App 99 aberto na tela: não ler
+    private var modoTeste = false                     // print de teste: avisa, mas não conta
+
     // Só na thread principal
     private var observadorPedido: ObservadorDarwin?
+    private var observadoresApp: [ObservadorDarwin] = []
 
     // MARK: Ciclo da transmissão
 
@@ -43,9 +47,28 @@ class SampleHandler: RPBroadcastSampleHandler {
         // O app pede o relatório quando abre; respondemos com os últimos dias
         observadorPedido = ObservadorDarwin(DiaRelatorio.nomePedido) { [weak self] in self?.enviarRelatorio() }
         filaOCR.async { self.diario.comecarTempo() }
+        observadoresApp = SinalApp.allCases.map { sinal in
+            ObservadorDarwin(sinal.nome) { [weak self] in self?.appAvisou(sinal) }
+        }
 
         SinalExtensao.iniciou.enviar()   // o app responde mandando os ajustes
         pedirAjustes(tentativa: 1)
+    }
+
+    private func appAvisou(_ sinal: SinalApp) {
+        filaOCR.async {
+            switch sinal {
+            case .naFrente:    self.appNaFrenteAte = Date().addingTimeInterval(8)   // o app repete a cada 4 s
+            case .saiu:        self.appNaFrenteAte = .distantPast
+            case .testeInicio: self.modoTeste = true; self.appNaFrenteAte = .distantPast
+            case .testeFim:    self.modoTeste = false
+            case .zerarHoje:
+                self.diario.zerarHoje()
+                self.ultimaOferta = nil
+                self.corridaAceita = nil
+                DiaRelatorio.canal.enviar(self.diario.hoje.campos)
+            }
+        }
     }
 
     /// Manda os últimos 7 dias pro app (se ele não estiver aberto, ninguém escuta e tudo bem).
@@ -150,6 +173,9 @@ class SampleHandler: RPBroadcastSampleHandler {
     // MARK: Análise (filaOCR)
 
     private func analisar(_ pixelBuffer: CVPixelBuffer, orientacao: CGImagePropertyOrientation) {
+        diario.acumularTempo()
+        guard Date() >= appNaFrenteAte else { return }   // é a tela do próprio App 99
+
         let linhas: [String]
         do {
             linhas = try leitor.reconhecerTexto(em: pixelBuffer, orientacao: orientacao)
@@ -158,11 +184,10 @@ class SampleHandler: RPBroadcastSampleHandler {
             return
         }
         SinalExtensao.leitura.enviar()
-        diario.acumularTempo()
 
         // Sem oferta na tela: talvez seja uma tela de corrida em andamento
         guard let oferta = try? ParserOferta99.extrair(de: linhas) else {
-            acompanharCorrida(TelaCorrida.identificar(linhas))
+            if !modoTeste { acompanharCorrida(TelaCorrida.identificar(linhas)) }
             return
         }
         SinalExtensao.oferta.enviar()
@@ -171,8 +196,10 @@ class SampleHandler: RPBroadcastSampleHandler {
         SinalExtensao.aviso.enviar()
 
         let analise = calculadora.analisar(oferta)
-        diario.contarOferta()
-        ultimaOferta = (analise, Date())
+        if !modoTeste {
+            diario.contarOferta()
+            ultimaOferta = (analise, Date())
+        }
 
         let frase = analise.fraseFalada
         Notificador.enviar(analise)

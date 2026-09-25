@@ -51,7 +51,16 @@ struct ContentView: View {
             await Notificador.pedirPermissao()
         }
         .onChange(of: fase) { nova in
-            if nova == .active { relatorio.pedir() }   // atualiza o relatório ao voltar pro app
+            if nova == .active {
+                relatorio.pedir()   // atualiza o relatório ao voltar pro app
+                SinalApp.naFrente.enviar()
+            } else {
+                SinalApp.saiu.enviar()
+            }
+        }
+        // Enquanto o app está na tela, a extensão não lê (senão lê a tela do próprio app)
+        .onReceive(Timer.publish(every: 4, on: .main, in: .common).autoconnect()) { _ in
+            if fase == .active && !ModoTeste.telaCheia { SinalApp.naFrente.enviar() }
         }
     }
 }

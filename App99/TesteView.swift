@@ -100,6 +100,16 @@ struct TesteView: View {
                     .background(Color.black)
                     .ignoresSafeArea()
                     .onTapGesture { telaCheia = false }
+                    // A extensão lê este print como se fosse a 99, sem contar no relatório
+                    .onAppear {
+                        ModoTeste.telaCheia = true
+                        SinalApp.testeInicio.enviar()
+                    }
+                    .onDisappear {
+                        ModoTeste.telaCheia = false
+                        SinalApp.testeFim.enviar()
+                        SinalApp.naFrente.enviar()
+                    }
             }
         }
         .onChange(of: item) { novo in
@@ -153,4 +163,10 @@ struct TesteView: View {
         case .ruim:      return .red
         }
     }
+}
+
+@MainActor
+enum ModoTeste {
+    /// Print em tela cheia aberto: o app para de avisar "estou na frente" pra extensão ler o print.
+    static var telaCheia = false
 }

@@ -7,7 +7,9 @@ final class RelatorioStore: ObservableObject {
     @Published private(set) var dias: [Int: DiaRelatorio] = [:]
 
     private let chave = "relatorio"
+    private let chaveZerar = "zerarPendente"   // dia a zerar que a extensão ainda não confirmou
     private var receptor: ReceptorDarwin?
+    private var observadorInicio: ObservadorDarwin?
 
     init() {
         if let dados = UserDefaults.standard.data(forKey: chave),
@@ -18,6 +20,23 @@ final class RelatorioStore: ObservableObject {
             guard let dia = DiaRelatorio(campos: campos) else { return }
             Task { @MainActor in self?.receber(dia) }
         }
+        // Se zerou com a leitura desligada, repete o pedido quando ela ligar
+        observadorInicio = ObservadorDarwin(SinalExtensao.iniciou.nome.rawValue as String) { [weak self] in
+            Task { @MainActor in self?.repetirZerarSePendente() }
+        }
+    }
+
+    /// Apaga os números de hoje, aqui e na extensão.
+    func zerarHoje() {
+        let hoje = DiaRelatorio.numero()
+        UserDefaults.standard.set(hoje, forKey: chaveZerar)
+        guardar(DiaRelatorio(dia: hoje))
+        SinalApp.zerarHoje.enviar()
+    }
+
+    private func repetirZerarSePendente() {
+        guard UserDefaults.standard.integer(forKey: chaveZerar) == DiaRelatorio.numero() else { return }
+        SinalApp.zerarHoje.enviar()
     }
 
     /// Pede os últimos dias pra extensão (se a leitura estiver ligada, ela responde).
@@ -26,6 +45,16 @@ final class RelatorioStore: ObservableObject {
     }
 
     private func receber(_ dia: DiaRelatorio) {
+        let d = UserDefaults.standard
+        if d.integer(forKey: chaveZerar) == dia.dia {
+            // Esperando a extensão confirmar o zerar: ignora números antigos, aceita os zerados
+            guard dia.corridas == 0, dia.ofertas == 0, dia.faturadoCent == 0 else { return }
+            d.removeObject(forKey: chaveZerar)
+        }
+        guardar(dia)
+    }
+
+    private func guardar(_ dia: DiaRelatorio) {
         guard dias[dia.dia] != dia else { return }
         dias[dia.dia] = dia
         if let dados = try? JSONEncoder().encode(Array(dias.values)) {
@@ -89,14 +118,19 @@ struct ResumoDiaView: View {
 
 struct RelatorioSections: View {
     @ObservedObject var store: RelatorioStore
+    @State private var confirmarZerar = false
 
     var body: some View {
         Section {
             ResumoDiaView(dia: store.hoje)
+            Button("Zerar hoje", role: .destructive) { confirmarZerar = true }
+                .confirmationDialog("Apagar os números de hoje?", isPresented: $confirmarZerar, titleVisibility: .visible) {
+                    Button("Zerar hoje", role: .destructive) { store.zerarHoje() }
+                }
         } header: {
             Text("Hoje — \(Datas.curta(store.hoje.data))")
         } footer: {
-            Text("Conta a corrida quando a leitura vê \"Finalizar corrida\" depois de uma oferta. ⏱️ = lucro por hora com a leitura ligada.")
+            Text("A corrida entra quando você finaliza a viagem na 99. ⏱️ = lucro por hora com a leitura ligada. Prints de teste não contam.")
         }
 
         if !store.anteriores.isEmpty {
