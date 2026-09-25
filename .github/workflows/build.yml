@@ -6,15 +6,27 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
+    # Duas versões: Xcode mais recente e Xcode 16 (teste pra extensão que morre
+    # com CODESIGNING "Invalid Page" depois de reassinada pelo Sideloadly no iOS 26)
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            xcode: latest-stable
+            artifact: App99-ipa
+          - runner: macos-15
+            xcode: '16.4'
+            artifact: App99-ipa-xcode16
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Selecionar Xcode mais recente
+      - name: Selecionar Xcode ${{ matrix.xcode }}
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: ${{ matrix.xcode }}
 
       - name: Instalar XcodeGen
         run: brew install xcodegen
@@ -53,6 +65,6 @@ jobs:
       - name: Publicar artifact
         uses: actions/upload-artifact@v4
         with:
-          name: App99-ipa
+          name: ${{ matrix.artifact }}
           path: App99.ipa
           if-no-files-found: error
