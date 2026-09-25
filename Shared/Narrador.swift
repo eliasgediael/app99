@@ -18,11 +18,13 @@ final class Narrador: NSObject, AVSpeechSynthesizerDelegate {
     nonisolated static let chaveFalar = "falarResultado"
 
     /// Ajustável na tela de Ajustes do app (chega na extensão via AjustesCompartilhados).
-    var velocidade: Float {
+    nonisolated static var velocidadeAtual: Double {
         let d = UserDefaults.standard
-        guard d.object(forKey: Self.chaveVelocidade) != nil else { return Float(Self.velocidadePadrao) }
-        return Float(d.double(forKey: Self.chaveVelocidade))
+        guard d.object(forKey: chaveVelocidade) != nil else { return velocidadePadrao }
+        return d.double(forKey: chaveVelocidade)
     }
+
+    var velocidade: Float { Float(Self.velocidadeAtual) }
 
     /// Desligada por padrão: com música tocando, voz + 99 + música vira bagunça; a notificação basta.
     nonisolated static var vozLigada: Bool {

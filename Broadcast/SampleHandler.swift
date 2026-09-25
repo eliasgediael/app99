@@ -28,16 +28,40 @@ class SampleHandler: RPBroadcastSampleHandler {
     // MARK: Ciclo da transmissão
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
-        SinalExtensao.iniciou.enviar()
+        // Ajustes do app (valores da moto, voz) chegam por Darwin notifications;
+        // podem chegar de novo a qualquer hora se você mudar algo no app.
+        let receptor = ReceptorAjustes.shared
+        receptor.aoReceber = { [weak self] in self?.ajustesChegaram() }
+        receptor.escutar()
 
-        // Traz os ajustes do app (valores da moto, voz) pro UserDefaults desta extensão
-        let recebeu = AjustesCompartilhados.receber()
-        if recebeu { SinalExtensao.ajustesRecebidos.enviar() }
-        filaOCR.sync { calculadora = CalculadoraCorrida(config: .atual) }
+        SinalExtensao.iniciou.enviar()   // o app responde mandando os ajustes
+        pedirAjustes(tentativa: 1)
+    }
 
-        let minimo = Formato.reais(ConfigMoto.atual.minimoPorKm)
-        Notificador.enviar("Leitura ligada. Abra a 99. Mínimo \(minimo)/km"
-                           + (recebeu ? "." : " (ajustes do app não chegaram, usando o padrão)."))
+    private var ajustesRecebidos = false   // só na thread principal
+
+    /// Pede de novo a cada 2 s; depois de 5 tentativas segue com o padrão.
+    private func pedirAjustes(tentativa: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, !self.ajustesRecebidos else { return }
+            if tentativa < 5 {
+                SinalExtensao.pedirAjustes.enviar()
+                self.pedirAjustes(tentativa: tentativa + 1)
+            } else {
+                Notificador.enviar("Leitura ligada, mas seus ajustes não chegaram: usando o padrão "
+                                   + "(mínimo \(Formato.reais(ConfigMoto.atual.minimoPorKm))/km). Abra o App 99 pra enviar.")
+            }
+        }
+    }
+
+    private func ajustesChegaram() {
+        let config = ConfigMoto.atual
+        filaOCR.async { self.calculadora = CalculadoraCorrida(config: config) }
+        SinalExtensao.ajustesRecebidos.enviar()
+
+        guard !ajustesRecebidos else { return }   // avisa só na primeira vez
+        ajustesRecebidos = true
+        Notificador.enviar("Leitura ligada. Mínimo \(Formato.reais(config.minimoPorKm))/km. Abra a 99.")
         Task { @MainActor in await Narrador.shared.falarSeLigado("Leitor da 99 ligado.") }
     }
 

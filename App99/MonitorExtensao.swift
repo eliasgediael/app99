@@ -28,6 +28,9 @@ final class MonitorExtensao: ObservableObject {
         guard let sinal = SinalExtensao.allCases.first(where: { $0.nome.rawValue as String == nome }) else { return }
         contagem[sinal, default: 0] += 1
         ultimoSinalEm = Date()
+        if sinal == .iniciou || sinal == .pedirAjustes {
+            AjustesCompartilhados.enviar()
+        }
     }
 
     func quantos(_ s: SinalExtensao) -> Int { contagem[s] ?? 0 }

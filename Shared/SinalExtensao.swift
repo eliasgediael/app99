@@ -4,7 +4,8 @@ import Foundation
 /// sem App Groups nem entitlements. Não carregam dados; o app só conta quantos chegaram.
 enum SinalExtensao: String, CaseIterable {
     case iniciou       // transmissão começou
-    case ajustesRecebidos   // leu os ajustes que o app publicou
+    case pedirAjustes       // extensão pede os ajustes (o app responde)
+    case ajustesRecebidos   // chegou um conjunto válido de ajustes
     case leitura       // um frame passou pelo OCR
     case falhaOCR      // o Vision deu erro
     case oferta        // o parser achou uma oferta

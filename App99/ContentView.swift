@@ -42,12 +42,6 @@ struct ContentView: View {
             }
             .navigationTitle("App 99")
         }
-        .task {
-            AjustesCompartilhados.publicar()
-            await Notificador.pedirPermissao()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)) { _ in
-            AjustesCompartilhados.publicar()   // a extensão lê ao iniciar a transmissão
-        }
+        .task { await Notificador.pedirPermissao() }
     }
 }

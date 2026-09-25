@@ -60,8 +60,8 @@ struct AjustesView: View {
             }
         }
         .navigationTitle("Ajustes")
-        .onDisappear { AjustesCompartilhados.publicar() }
-        .onChange(of: falarResultado) { _ in AjustesCompartilhados.publicar() }
+        .onDisappear { AjustesCompartilhados.enviar() }   // vale na hora se a leitura estiver ligada
+        .onChange(of: falarResultado) { _ in AjustesCompartilhados.enviar() }
         .scrollDismissesKeyboard(.interactively)
     }
 
