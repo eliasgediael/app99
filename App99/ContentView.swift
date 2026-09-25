@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// Tela inicial enxuta: painel do turno (ou Iniciar turno), histórico curto e linha do tempo.
+/// Ferramentas de teste/depuração ficam em "Mais".
 struct ContentView: View {
     @StateObject private var monitor = MonitorExtensao()
     @StateObject private var relatorio = RelatorioStore()
@@ -11,15 +13,7 @@ struct ContentView: View {
             List {
                 PainelTurno(monitor: monitor)
 
-                Section {
-                    BotaoIniciarLeitura()
-                } header: {
-                    Text("Só a leitura (sem turno)")
-                } footer: {
-                    Text("Toque, escolha \"App 99\" na lista e \"Iniciar Transmissão\". Depois abra a 99: cada oferta nova é falada e aparece como notificação. Pra parar, toque no indicador de gravação no topo da tela.")
-                }
-
-                RelatorioSections(store: relatorio)
+                HistoricoCurto()
 
                 Section {
                     NavigationLink {
@@ -27,47 +21,24 @@ struct ContentView: View {
                     } label: {
                         Label("Linha do tempo", systemImage: "list.bullet.rectangle")
                     }
-                } footer: {
-                    Text("Cada oferta, aceite e mudança de estado, com o motivo de cada decisão.")
-                }
-
-                Section {
-                    StatusExtensaoView(monitor: monitor)
-                } header: {
-                    Text("Status da leitura (ao vivo)")
-                } footer: {
-                    Text("Atualiza enquanto este app está aberto. Pra testar em casa: inicie a leitura, vá em \"Testar com um print\" e toque em \"Mostrar em tela cheia\".")
-                }
-
-                Section("Teste") {
                     NavigationLink {
-                        TesteView()
+                        MaisView(monitor: monitor, relatorio: relatorio)
                     } label: {
-                        Label("Testar com um print", systemImage: "photo.on.rectangle")
+                        Label("Mais", systemImage: "ellipsis.circle")
                     }
-                }
-
-                Section {
-                    NavigationLink {
-                        AjustesView()
-                    } label: {
-                        Label("Configuração da moto e voz", systemImage: "gearshape")
-                    }
-                } header: {
-                    Text("Ajustes")
                 }
             }
             .navigationTitle("App 99")
         }
         .task {
-            if TurnoStore.shared.atual != nil { Localizacao.shared.ligar() }
+            if TurnoStore.shared.atual != nil { Localizacao.shared.ligar() }   // reabriu com turno ativo
             relatorio.pedir()
             linha.pedir()
             await Notificador.pedirPermissao()
         }
         .onChange(of: fase) { nova in
             if nova == .active {
-                relatorio.pedir()   // atualiza o relatório ao voltar pro app
+                relatorio.pedir()   // atualiza ao voltar pro app
                 linha.pedir()
                 SinalApp.naFrente.enviar()
             } else {
@@ -78,5 +49,43 @@ struct ContentView: View {
         .onReceive(Timer.publish(every: 4, on: .main, in: .common).autoconnect()) { _ in
             if fase == .active && !ModoTeste.telaCheia { SinalApp.naFrente.enviar() }
         }
+    }
+}
+
+/// Ferramentas e telas antigas (nada foi removido, só saiu da tela inicial).
+struct MaisView: View {
+    @ObservedObject var monitor: MonitorExtensao
+    @ObservedObject var relatorio: RelatorioStore
+
+    var body: some View {
+        List {
+            Section {
+                NavigationLink { AjustesView() } label: {
+                    Label("Configuração da moto e voz", systemImage: "gearshape")
+                }
+                NavigationLink { TesteView() } label: {
+                    Label("Testar com um print", systemImage: "photo.on.rectangle")
+                }
+            }
+
+            Section {
+                BotaoIniciarLeitura()
+            } header: {
+                Text("Só a leitura (sem turno)")
+            } footer: {
+                Text("Liga só a leitura das ofertas, sem turno e sem GPS. As notificações funcionam igual.")
+            }
+
+            Section {
+                StatusExtensaoView(monitor: monitor)
+            } header: {
+                Text("Status da leitura (ao vivo)")
+            } footer: {
+                Text("Pra testar em casa: ligue a leitura, vá em \"Testar com um print\" e toque em \"Mostrar em tela cheia\".")
+            }
+
+            RelatorioSections(store: relatorio)
+        }
+        .navigationTitle("Mais")
     }
 }

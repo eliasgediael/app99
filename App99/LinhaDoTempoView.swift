@@ -90,16 +90,23 @@ final class LinhaDoTempoStore: ObservableObject {
 
 struct LinhaDoTempoView: View {
     @ObservedObject var store: LinhaDoTempoStore
+    /// Só os eventos desse período (ex.: um turno). nil = todos.
+    var intervalo: DateInterval? = nil
+
+    private var eventos: [EventoLinha] {
+        guard let i = intervalo else { return store.eventos }
+        return store.eventos.filter { i.contains($0.data) }
+    }
 
     private var porDia: [(dia: Int, eventos: [EventoLinha])] {
-        Dictionary(grouping: store.eventos, by: \.dia)
+        Dictionary(grouping: eventos, by: \.dia)
             .map { ($0.key, $0.value.sorted { ($0.em, $0.seq) > ($1.em, $1.seq) }) }   // mais novo primeiro
             .sorted { $0.dia > $1.dia }
     }
 
     var body: some View {
         List {
-            if store.eventos.isEmpty {
+            if eventos.isEmpty {
                 Text("Nenhum evento ainda. Os eventos chegam enquanto a leitura está ligada e este app aberto.")
                     .foregroundStyle(.secondary)
             }
