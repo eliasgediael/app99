@@ -1,0 +1,79 @@
+import SwiftUI
+
+/// Edita a ConfigMoto e a velocidade da fala. Grava no UserDefaults com as mesmas
+/// chaves que `ConfigMoto.atual` e `Narrador` leem.
+struct AjustesView: View {
+    private static let padrao = ConfigMoto()
+
+    @AppStorage("custoPorKm") private var custoPorKm = padrao.custoPorKm
+    @AppStorage("minimoPorKm") private var minimoPorKm = padrao.minimoPorKm
+    @AppStorage("bomPorKm") private var bomPorKm = padrao.bomPorKm
+    @AppStorage("alertaBuscaKm") private var alertaBuscaKm = padrao.alertaBuscaKm
+    @AppStorage(Narrador.chaveVelocidade) private var velocidadeFala = Narrador.velocidadePadrao
+
+    var body: some View {
+        Form {
+            Section {
+                campo("Custo por km (R$)", valor: $custoPorKm)
+                campo("Mínimo por km (R$)", valor: $minimoPorKm)
+                campo("Bom por km (R$)", valor: $bomPorKm)
+                campo("Alerta de busca (km)", valor: $alertaBuscaKm)
+            } header: {
+                Text("Moto")
+            } footer: {
+                Text("Custo por km: gasolina + manutenção + desgaste. Abaixo do mínimo por km (valor ÷ km total) = Recusa; acima do bom = Corrida boa. Busca maior que o alerta é avisada na fala.")
+            }
+
+            Section {
+                VStack(alignment: .leading) {
+                    Text("Velocidade: \(rotuloVelocidade)")
+                    Slider(value: $velocidadeFala, in: 0.35...0.60, step: 0.01) {
+                        Text("Velocidade")
+                    } minimumValueLabel: {
+                        Image(systemName: "tortoise")
+                    } maximumValueLabel: {
+                        Image(systemName: "hare")
+                    }
+                }
+                Button {
+                    Task { await Narrador.shared.falar("Corrida boa. 2 reais e 60 por quilômetro. Lucro de 9 reais e 40. 5,2 quilômetros no total.") }
+                } label: {
+                    Label("Ouvir exemplo", systemImage: "speaker.wave.2")
+                }
+            } header: {
+                Text("Voz")
+            }
+
+            Section {
+                Button("Voltar aos valores padrão", role: .destructive) {
+                    custoPorKm = Self.padrao.custoPorKm
+                    minimoPorKm = Self.padrao.minimoPorKm
+                    bomPorKm = Self.padrao.bomPorKm
+                    alertaBuscaKm = Self.padrao.alertaBuscaKm
+                    velocidadeFala = Narrador.velocidadePadrao
+                }
+            }
+        }
+        .navigationTitle("Ajustes")
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private var rotuloVelocidade: String {
+        switch velocidadeFala {
+        case ..<0.45: return "devagar"
+        case ..<0.53: return "normal"
+        default:      return "rápida"
+        }
+    }
+
+    private func campo(_ titulo: String, valor: Binding<Double>) -> some View {
+        LabeledContent(titulo) {
+            TextField(titulo,
+                      value: valor,
+                      format: .number.precision(.fractionLength(2)).locale(Locale(identifier: "pt_BR")))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 100)
+        }
+    }
+}

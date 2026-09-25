@@ -134,7 +134,7 @@ struct TesteView: View {
         do {
             linhas = try await leitor.reconhecerTexto(em: imagem)
             let o = try ParserOferta99.extrair(de: linhas)
-            let a = CalculadoraCorrida(config: ConfigMoto()).analisar(o)   // mesma config da extensão
+            let a = CalculadoraCorrida(config: .atual).analisar(o)   // valores da tela de Ajustes
             oferta = o
             analise = a
             lendo = false

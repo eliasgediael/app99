@@ -12,7 +12,15 @@ final class Narrador: NSObject, AVSpeechSynthesizerDelegate {
     private var continuacao: CheckedContinuation<Void, Never>?
     private var falaAtual: ObjectIdentifier?
 
-    var velocidade: Float = 0.56   // 0.5 = normal; um pouco mais rápido pra caber no tempo da oferta
+    nonisolated static let chaveVelocidade = "velocidadeFala"
+    nonisolated static let velocidadePadrao = 0.50   // 0.5 = normal do iPhone
+
+    /// Ajustável na tela de Ajustes do app (a extensão não enxerga esse ajuste e usa o padrão).
+    var velocidade: Float {
+        let d = UserDefaults.standard
+        guard d.object(forKey: Self.chaveVelocidade) != nil else { return Float(Self.velocidadePadrao) }
+        return Float(d.double(forKey: Self.chaveVelocidade))
+    }
 
     override init() {
         super.init()

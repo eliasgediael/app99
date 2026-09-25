@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ContentView: View {
-    private let config = ConfigMoto()
     @StateObject private var monitor = MonitorExtensao()
 
     var body: some View {
@@ -32,14 +31,13 @@ struct ContentView: View {
                 }
 
                 Section {
-                    LabeledContent("Custo por km", value: Formato.reais(config.custoPorKm))
-                    LabeledContent("Mínimo por km", value: Formato.reais(config.minimoPorKm))
-                    LabeledContent("Bom por km", value: Formato.reais(config.bomPorKm))
-                    LabeledContent("Alerta de busca", value: Formato.km(config.alertaBuscaKm))
+                    NavigationLink {
+                        AjustesView()
+                    } label: {
+                        Label("Configuração da moto e voz", systemImage: "gearshape")
+                    }
                 } header: {
-                    Text("Configuração da moto")
-                } footer: {
-                    Text("Valores fixos no código (Shared/CalculadoraCorrida.swift).")
+                    Text("Ajustes")
                 }
             }
             .navigationTitle("App 99")
