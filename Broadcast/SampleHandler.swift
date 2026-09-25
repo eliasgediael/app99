@@ -104,8 +104,9 @@ class SampleHandler: RPBroadcastSampleHandler {
         guard ehNova(oferta) else { return }
         SinalExtensao.aviso.enviar()
 
-        let frase = calculadora.analisar(oferta).fraseFalada
-        Notificador.enviar(frase)
+        let analise = calculadora.analisar(oferta)
+        let frase = analise.fraseFalada
+        Notificador.enviar(analise)
         Task { @MainActor in await Narrador.shared.falar(frase) }
     }
 

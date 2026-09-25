@@ -20,12 +20,13 @@ struct AnalisarCorrida99Intent: AppIntent {
             let oferta = try await LeitorOferta99().ler(imagem: imagem)
             let analise = CalculadoraCorrida().analisar(oferta)
             frase = analise.fraseFalada
+            Notificador.enviar(analise)   // caso o áudio não toque
         } catch {
             // Fala o erro em vez de mostrar tela de erro — você está pilotando
             frase = "Não consegui ler a corrida."
+            Notificador.enviar(frase)
         }
 
-        Notificador.enviar(frase)   // caso o áudio não toque
         await Narrador.shared.falar(frase)
         return .result(value: frase)   // também sai pro Atalho, se quiser usar "Falar texto"
     }
