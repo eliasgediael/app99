@@ -9,6 +9,7 @@ struct AjustesView: View {
     @AppStorage("minimoPorKm") private var minimoPorKm = padrao.minimoPorKm
     @AppStorage("bomPorKm") private var bomPorKm = padrao.bomPorKm
     @AppStorage("alertaBuscaKm") private var alertaBuscaKm = padrao.alertaBuscaKm
+    @AppStorage("notaMinima") private var notaMinima = padrao.notaMinima
     @AppStorage(Narrador.chaveVelocidade) private var velocidadeFala = Narrador.velocidadePadrao
     @AppStorage(Narrador.chaveFalar) private var falarResultado = false
 
@@ -23,6 +24,14 @@ struct AjustesView: View {
                 Text("Moto")
             } footer: {
                 Text("Custo por km: gasolina + manutenção + desgaste. Abaixo do mínimo por km (valor ÷ km total) = Recusa; acima do bom = Corrida boa. Busca maior que o alerta é avisada na fala.")
+            }
+
+            Section {
+                campo("Nota mínima", valor: $notaMinima)
+            } header: {
+                Text("Passageiro")
+            } footer: {
+                Text("Passageiro com nota abaixo disso = Recusa, mesmo com valor bom.")
             }
 
             Section {
@@ -54,6 +63,7 @@ struct AjustesView: View {
                     minimoPorKm = Self.padrao.minimoPorKm
                     bomPorKm = Self.padrao.bomPorKm
                     alertaBuscaKm = Self.padrao.alertaBuscaKm
+                    notaMinima = Self.padrao.notaMinima
                     velocidadeFala = Narrador.velocidadePadrao
                     falarResultado = false
                 }

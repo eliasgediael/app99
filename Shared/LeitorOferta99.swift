@@ -10,6 +10,7 @@ struct OfertaCorrida {
     let kmViagem: Double           // distância até o destino
     let minAtePassageiro: Int?     // opcional, se a 99 mostrar
     let minViagem: Int?
+    let notaPassageiro: Double?    // "4,95 • +999 corridas"; nil se não achar (ex.: passageiro novo)
     let textoBruto: String         // útil pra depurar quando o layout da 99 mudar
 }
 
@@ -112,6 +113,12 @@ enum ParserOferta99 {
         options: [.caseInsensitive]
     )
 
+    // Nota do passageiro: 1,00–5,00 com 2 casas, sem R$ antes nem "x" depois (multiplicador "1,3x")
+    private static let regexNota = try! NSRegularExpression(
+        pattern: #"(?<![\d,.$])([1-5][,.]\d{2})(?![\d,.]|\s?x)"#
+    )
+    private static let regexReais = try! NSRegularExpression(pattern: #"R\s?[$S5]"#)
+
     // 3 min | 12min
     private static let regexMinutos = try! NSRegularExpression(
         pattern: #"(\d+)\s?min"#,
@@ -128,6 +135,7 @@ enum ParserOferta99 {
 
         // Na 99 o 1º trecho é a busca e o 2º é a viagem.
         // Primeiro tenta o formato "7 min (2,1 km)", que ignora "km" soltos (mapa, avisos).
+        let nota = extrairNota(de: linhas)
         let trechos = capturasTrecho(em: texto).filter { $0.km > 0 && $0.km < 200 }
         if trechos.count >= 2 {
             return OfertaCorrida(
@@ -136,6 +144,7 @@ enum ParserOferta99 {
                 kmViagem: trechos[1].km,
                 minAtePassageiro: trechos[0].min,
                 minViagem: trechos[1].min,
+                notaPassageiro: nota,
                 textoBruto: texto
             )
         }
@@ -154,8 +163,34 @@ enum ParserOferta99 {
             kmViagem: distancias[1],
             minAtePassageiro: minutos.first,
             minViagem: minutos.dropFirst().first,
+            notaPassageiro: nota,
             textoBruto: texto
         )
+    }
+
+    /// 1º: linha com "corridas" (ex.: "4,95 • +999 corridas"), sem R$ (evita "R$ 1,14 ... por corrida").
+    /// 2º: linha que é só a nota, quando o OCR separa "4,95" de "+999 corridas".
+    static func extrairNota(de linhas: [String]) -> Double? {
+        func notaEm(_ s: String) -> Double? {
+            let ns = s as NSString
+            guard let m = regexNota.firstMatch(in: s, range: NSRange(location: 0, length: ns.length)),
+                  let v = Double(ns.substring(with: m.range(at: 1)).replacingOccurrences(of: ",", with: ".")),
+                  v <= 5 else { return nil }
+            return v
+        }
+        func temReais(_ s: String) -> Bool {
+            regexReais.firstMatch(in: s, range: NSRange(location: 0, length: (s as NSString).length)) != nil
+        }
+
+        for linha in linhas where linha.lowercased().contains("corridas") && !temReais(linha) {
+            if let v = notaEm(linha) { return v }
+        }
+        let enfeites = CharacterSet.whitespaces.union(CharacterSet(charactersIn: "•·*★☆⭐"))
+        for linha in linhas {
+            let limpa = linha.trimmingCharacters(in: enfeites)
+            if limpa.count == 4, let v = notaEm(limpa) { return v }
+        }
+        return nil
     }
 
     // MARK: Helpers

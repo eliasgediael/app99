@@ -13,6 +13,10 @@ enum Formato {
         moeda.string(from: NSNumber(value: v)) ?? String(format: "R$ %.2f", v)
     }
 
+    static func nota(_ v: Double) -> String {
+        String(format: "%.2f", v).replacingOccurrences(of: ".", with: ",")
+    }
+
     static func km(_ v: Double) -> String {
         String(format: "%.1f km", v).replacingOccurrences(of: ".", with: ",")
     }

@@ -9,23 +9,20 @@ enum Notificador {
             .requestAuthorization(options: [.alert, .sound])
     }
 
-    /// 🟢 Corrida boa · R$ 2,60/km
-    /// R$ 13,50 · 5,2 km no total
-    /// 💰 Lucro R$ 11,68 · R$ 43,80/h
-    /// 📍 Busca 1,2 km · 🏁 Viagem 4,0 km
+    /// 🟢 Corrida boa · ⭐ 4,95
+    /// 💰 Lucro R$ 8,96 · R$ 1,08/km
+    /// 📏 11,2 km no total
     static func enviar(_ a: AnaliseCorrida) {
-        let o = a.oferta
-
-        var lucro = "💰 Lucro \(Formato.reais(a.lucro))"
-        if let porHora = a.ganhoPorHora {
-            lucro += " · \(Formato.reais(porHora))/h"
+        var titulo = "\(a.veredito.emoji) \(a.veredito.falado)"
+        if let nota = a.oferta.notaPassageiro {
+            titulo += " · ⭐ \(Formato.nota(nota))"
+            if a.notaBaixa { titulo += " nota baixa" }
         }
-        var busca = "📍 Busca \(Formato.km(o.kmAtePassageiro))"
-        if a.buscaLonga { busca += " ⚠️" }
 
-        enviar(titulo: "\(a.veredito.emoji) \(a.veredito.falado) · \(Formato.reais(a.ganhoPorKm))/km",
-               subtitulo: "\(Formato.reais(o.valor)) · \(Formato.km(a.kmTotal)) no total",
-               corpo: "\(lucro)\n\(busca) · 🏁 Viagem \(Formato.km(o.kmViagem))")
+        enviar(titulo: titulo,
+               subtitulo: nil,
+               corpo: "💰 Lucro \(Formato.reais(a.lucro)) · \(Formato.reais(a.ganhoPorKm))/km\n"
+                    + "📏 \(Formato.km(a.kmTotal)) no total")
     }
 
     static func enviar(_ frase: String) {

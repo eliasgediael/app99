@@ -15,7 +15,7 @@ enum AjustesCompartilhados {
     fileprivate static func nomeBit(_ campo: Int, _ bit: Int) -> String { "\(prefixo).b.\(campo).\(bit)" }
 
     /// Campos em ordem fixa, em centésimos (0,35 → 35).
-    private static let chaves = ["custoPorKm", "minimoPorKm", "bomPorKm", "alertaBuscaKm", Narrador.chaveVelocidade]
+    private static let chaves = ["custoPorKm", "minimoPorKm", "bomPorKm", "alertaBuscaKm", "notaMinima", Narrador.chaveVelocidade]
     fileprivate static let totalCampos = chaves.count + 2   // + voz ligada + conferência
 
     // MARK: App → envia
@@ -23,7 +23,7 @@ enum AjustesCompartilhados {
     /// App: manda os ajustes atuais. Chamado quando a extensão pede e quando um ajuste muda.
     static func enviar() {
         let c = ConfigMoto.atual
-        let decimais = [c.custoPorKm, c.minimoPorKm, c.bomPorKm, c.alertaBuscaKm, Narrador.velocidadeAtual]
+        let decimais = [c.custoPorKm, c.minimoPorKm, c.bomPorKm, c.alertaBuscaKm, c.notaMinima, Narrador.velocidadeAtual]
         var campos = decimais.map { Int(($0 * 100).rounded()) & 0xFFFF }
         campos.append(Narrador.vozLigada ? 1 : 0)
         campos.append(conferencia(campos))

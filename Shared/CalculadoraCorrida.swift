@@ -12,6 +12,8 @@ struct ConfigMoto {
     var bomPorKm: Double = 2.50
     /// Busca acima disso gera aviso no áudio
     var alertaBuscaKm: Double = 3.0
+    /// Passageiro com nota abaixo disso = recusa, mesmo com valor bom
+    var notaMinima: Double = 4.90
 
     /// Lê do UserDefaults (tela de ajustes do app grava aqui); cai no padrão se não tiver.
     static var atual: ConfigMoto {
@@ -21,6 +23,7 @@ struct ConfigMoto {
         if d.object(forKey: "minimoPorKm") != nil { c.minimoPorKm = d.double(forKey: "minimoPorKm") }
         if d.object(forKey: "bomPorKm") != nil { c.bomPorKm = d.double(forKey: "bomPorKm") }
         if d.object(forKey: "alertaBuscaKm") != nil { c.alertaBuscaKm = d.double(forKey: "alertaBuscaKm") }
+        if d.object(forKey: "notaMinima") != nil { c.notaMinima = d.double(forKey: "notaMinima") }
         return c
     }
 }
@@ -49,10 +52,15 @@ struct AnaliseCorrida {
     let ganhoPorHora: Double?
     let veredito: Veredito
     let buscaLonga: Bool
+    /// Nota do passageiro abaixo da mínima (aí o veredito vira recusa)
+    let notaBaixa: Bool
 
     /// Frase curta, veredito primeiro — você decide no primeiro segundo.
     var fraseFalada: String {
         var partes = [veredito.falado]
+        if notaBaixa, let nota = oferta.notaPassageiro {
+            partes[0] += ", passageiro nota \(Formato.nota(nota))"
+        }
         partes.append("\(Fala.reais(ganhoPorKm)) por quilômetro")
         partes.append("lucro de \(Fala.reais(lucro))")
         partes.append("\(Fala.km(kmTotal)) no total")
@@ -80,12 +88,15 @@ struct CalculadoraCorrida {
             ganhoPorHora = lucro / (Double(a + v) / 60)
         }
 
-        let veredito: Veredito
+        var veredito: Veredito
         switch ganhoPorKm {
         case config.bomPorKm...:     veredito = .boa
         case config.minimoPorKm...:  veredito = .aceitavel
         default:                     veredito = .ruim
         }
+
+        let notaBaixa = o.notaPassageiro.map { $0 < config.notaMinima } ?? false
+        if notaBaixa { veredito = .ruim }
 
         return AnaliseCorrida(
             oferta: o,
@@ -96,7 +107,8 @@ struct CalculadoraCorrida {
             lucroPorKm: lucroPorKm,
             ganhoPorHora: ganhoPorHora,
             veredito: veredito,
-            buscaLonga: o.kmAtePassageiro >= config.alertaBuscaKm
+            buscaLonga: o.kmAtePassageiro >= config.alertaBuscaKm,
+            notaBaixa: notaBaixa
         )
     }
 }

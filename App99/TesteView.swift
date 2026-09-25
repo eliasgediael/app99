@@ -76,6 +76,7 @@ struct TesteView: View {
                     LabeledContent("Valor", value: Formato.reais(oferta.valor))
                     LabeledContent("Busca", value: Formato.km(oferta.kmAtePassageiro))
                     LabeledContent("Viagem", value: Formato.km(oferta.kmViagem))
+                    LabeledContent("Nota do passageiro", value: oferta.notaPassageiro.map(Formato.nota) ?? "—")
                     LabeledContent("Min até passageiro", value: oferta.minAtePassageiro.map { "\($0) min" } ?? "—")
                     LabeledContent("Min de viagem", value: oferta.minViagem.map { "\($0) min" } ?? "—")
                 }
