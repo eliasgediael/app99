@@ -1,37 +1,32 @@
 # App 99
 
-Lê as ofertas de corrida da 99 pela gravação de tela e fala se a corrida compensa, além de mostrar uma notificação com a mesma frase.
+Lê as ofertas de corrida da 99 pela gravação de tela e avisa por notificação (e voz, se ligada) se a corrida compensa. Durante um **turno**, registra ofertas, corridas, tempo, km (GPS) e abastecimentos, e mostra o resumo e o histórico.
 
-- `App99/`: o app (tela de teste, botão de gravação, atalho "Analisar corrida 99")
-- `Broadcast/`: extensão de gravação de tela (ReplayKit)
-- `Shared/`: leitor OCR, parser, calculadora, fala e notificação (entram nos dois targets)
+- `App99/`: o app (turno, resumo, histórico, linha do tempo, GPS, ajustes, teste com print, atalho "Analisar corrida 99")
+- `Broadcast/`: extensão de gravação de tela (ReplayKit): lê a tela e decide o estado das corridas (`MotorCorrida`)
+- `Shared/`: leitor OCR, parser, calculadora, notificação, canal de comunicação entre app e extensão
 - `project.yml`: projeto do XcodeGen (o `.xcodeproj` é gerado no CI)
 
 ## Baixar o .ipa
 
-1. No GitHub, abra **Actions** → **Build IPA** → a execução mais recente com ✅. Para gerar um build na hora, use **Run workflow**.
-2. Em **Artifacts**, baixe **App99-ipa** (vem em .zip) e extraia o `App99.ipa`.
+GitHub → **Actions** → **Build IPA** → execução mais recente com ✅ → **Artifacts** → **App99-ipa-xcode16**. Extraia o `App99.ipa`.
 
-## Instalar com o Sideloadly (Windows)
+## Instalar (AltStore)
 
-1. Instale o iTunes e o iCloud (versões do site da Apple, não as da Microsoft Store) e o [Sideloadly](https://sideloadly.io).
-2. Conecte o iPhone no cabo e toque em **Confiar** no aparelho.
-3. Arraste o `App99.ipa` pro Sideloadly, informe seu Apple ID e clique em **Start**.
-4. No iPhone:
-   - **Ajustes → Privacidade e Segurança → Modo de Desenvolvedor**: ative e reinicie.
-   - **Ajustes → Geral → VPN e Gerenciamento de Dispositivos**: confie no seu Apple ID.
+Use o **AltStore**. O Sideloadly quebra a extensão de gravação no iOS 26 (a extensão fecha com erro de assinatura "Invalid Page").
 
-Com Apple ID gratuito, o app **expira em 7 dias**. Para renovar, instale de novo pelo Sideloadly. O app mais a extensão ocupam 2 dos 3 apps permitidos.
-
-Se o Sideloadly disser que o bundle ID não está disponível, deixe ele trocar o ID. A extensão continua funcionando, mas não aparece mais pré-selecionada: escolha **App 99** manualmente na lista de transmissão.
+1. No PC: AltServer aberto (ícone de losango perto do relógio), com "Automatically Launch at Startup" marcado.
+2. Mande o `App99.ipa` para o iPhone e salve em Arquivos.
+3. No iPhone: **AltStore → My Apps → +** → escolha o `App99.ipa`. Atualizações são instaladas por cima, sem apagar os dados.
+4. A cada 7 dias o AltStore renova sozinho (AltServer aberto + mesmo Wi-Fi), ou use **My Apps → Refresh All**.
 
 ## Usar
 
-1. Abra o App 99 e permita as notificações.
-2. Toque em **Iniciar leitura da tela**, escolha **App 99** e depois **Iniciar Transmissão**. Você ouve "Leitor da 99 ligado".
-3. Abra a 99. Cada oferta nova é falada e vira notificação. A mesma oferta não se repete por 20 segundos.
-4. Para parar, toque no indicador vermelho de gravação no topo da tela.
+1. **Iniciar turno** → escolha **App 99** → **Iniciar Transmissão**. Permita a localização (só é usada durante o turno; aparece a pílula azul).
+2. Use a 99 normalmente. Cada oferta vira notificação.
+3. **+ Abastecimento** registra valor e preço/L (os litros são calculados).
+4. **Encerrar** para a gravação e o GPS e mostra o resumo.
 
-Use **Testar com um print** para conferir o OCR num print da galeria. A chave **OCR rápido** usa o mesmo modo da extensão.
+**Regras do faturamento:** só entra corrida **CONFIRMADA** (aceite + passageiro a bordo + tela de fim vistos). Corridas com evidência parcial aparecem como **ESTIMADA**, separadas. O resto é **INDETERMINADA** (R$ 0). A **Linha do tempo** mostra cada decisão e o motivo.
 
-Os valores da moto (custo/km, mínimo, bom, alerta de busca) ficam em `Shared/CalculadoraCorrida.swift` (`ConfigMoto`). Mude lá e faça push para gerar um novo .ipa.
+**Configurações:** Mais → Configuração da moto e voz (custo/km, mínimo, nota mínima, voz).
