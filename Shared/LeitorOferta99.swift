@@ -105,6 +105,13 @@ enum ParserOferta99 {
         options: [.caseInsensitive]
     )
 
+    // "7 min (2,1 km)" — formato do card da 99: minutos + distância entre parênteses.
+    // Aceita erros comuns do OCR: "mn"/"m1n", "(" lido como "[", "{" ou "C".
+    private static let regexTrecho = try! NSRegularExpression(
+        pattern: #"(\d{1,3})\s?m[il1]?n\.?\s*[(\[{C]?\s*(\d{1,3}(?:[.,]\d{1,2})?)\s?(km|m)(?![a-zà-ú])"#,
+        options: [.caseInsensitive]
+    )
+
     // 3 min | 12min
     private static let regexMinutos = try! NSRegularExpression(
         pattern: #"(\d+)\s?min"#,
@@ -119,7 +126,21 @@ enum ParserOferta99 {
             throw ErroOCR.valorNaoEncontrado
         }
 
-        // Na 99 a 1ª distância é a busca e a 2ª é a viagem
+        // Na 99 o 1º trecho é a busca e o 2º é a viagem.
+        // Primeiro tenta o formato "7 min (2,1 km)", que ignora "km" soltos (mapa, avisos).
+        let trechos = capturasTrecho(em: texto).filter { $0.km > 0 && $0.km < 200 }
+        if trechos.count >= 2 {
+            return OfertaCorrida(
+                valor: valor,
+                kmAtePassageiro: trechos[0].km,
+                kmViagem: trechos[1].km,
+                minAtePassageiro: trechos[0].min,
+                minViagem: trechos[1].min,
+                textoBruto: texto
+            )
+        }
+
+        // Plano B: quaisquer duas distâncias, na ordem de leitura
         let distancias = capturasDistancia(em: texto).filter { $0 > 0 && $0 < 200 }
         guard distancias.count >= 2 else {
             throw ErroOCR.distanciasNaoEncontradas(distancias.count)
@@ -143,6 +164,17 @@ enum ParserOferta99 {
         let ns = texto as NSString
         return regex.matches(in: texto, range: NSRange(location: 0, length: ns.length))
             .map { ns.substring(with: $0.range(at: 1)) }
+    }
+
+    private static func capturasTrecho(em texto: String) -> [(min: Int?, km: Double)] {
+        let ns = texto as NSString
+        return regexTrecho.matches(in: texto, range: NSRange(location: 0, length: ns.length))
+            .compactMap { m in
+                let numero = ns.substring(with: m.range(at: 2)).replacingOccurrences(of: ",", with: ".")
+                let unidade = ns.substring(with: m.range(at: 3)).lowercased()
+                guard let v = Double(numero) else { return nil }
+                return (Int(ns.substring(with: m.range(at: 1))), unidade == "m" ? v / 1000 : v)
+            }
     }
 
     private static func capturasDistancia(em texto: String) -> [Double] {
