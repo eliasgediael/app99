@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     private let config = ConfigMoto()
+    @StateObject private var monitor = MonitorExtensao()
 
     var body: some View {
         NavigationStack {
@@ -12,6 +13,14 @@ struct ContentView: View {
                     Text("Leitura automática")
                 } footer: {
                     Text("Toque, escolha \"App 99\" na lista e \"Iniciar Transmissão\". Depois abra a 99: cada oferta nova é falada e aparece como notificação. Pra parar, toque no indicador de gravação no topo da tela.")
+                }
+
+                Section {
+                    StatusExtensaoView(monitor: monitor)
+                } header: {
+                    Text("Status da leitura (ao vivo)")
+                } footer: {
+                    Text("Atualiza enquanto este app está aberto. Pra testar em casa: inicie a leitura, vá em \"Testar com um print\" e toque em \"Mostrar em tela cheia\".")
                 }
 
                 Section("Teste") {

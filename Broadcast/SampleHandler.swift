@@ -28,11 +28,14 @@ class SampleHandler: RPBroadcastSampleHandler {
     // MARK: Ciclo da transmissão
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
-        // Confirma na hora se o áudio funciona dentro da extensão
+        SinalExtensao.iniciou.enviar()
+        // Confirma na hora se a notificação e o áudio funcionam dentro da extensão
+        Notificador.enviar("Leitura ligada. Abra a 99.")
         Task { @MainActor in await Narrador.shared.falar("Leitor da 99 ligado.") }
     }
 
     override func broadcastFinished() {
+        SinalExtensao.terminou.enviar()
         filaOCR.sync { avisadasEm.removeAll() }
     }
 
@@ -85,15 +88,21 @@ class SampleHandler: RPBroadcastSampleHandler {
     // MARK: Análise (filaOCR)
 
     private func analisar(_ pixelBuffer: CVPixelBuffer, orientacao: CGImagePropertyOrientation) {
-        let oferta: OfertaCorrida
+        let linhas: [String]
         do {
-            let linhas = try leitor.reconhecerTexto(em: pixelBuffer, orientacao: orientacao)
-            oferta = try ParserOferta99.extrair(de: linhas)
+            linhas = try leitor.reconhecerTexto(em: pixelBuffer, orientacao: orientacao)
         } catch {
-            return   // a maioria dos frames não tem oferta — silêncio
+            SinalExtensao.falhaOCR.enviar()
+            return
         }
+        SinalExtensao.leitura.enviar()
+
+        // A maioria dos frames não tem oferta — silêncio
+        guard let oferta = try? ParserOferta99.extrair(de: linhas) else { return }
+        SinalExtensao.oferta.enviar()
 
         guard ehNova(oferta) else { return }
+        SinalExtensao.aviso.enviar()
 
         let frase = calculadora.analisar(oferta).fraseFalada
         Notificador.enviar(frase)

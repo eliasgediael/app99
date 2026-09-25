@@ -6,6 +6,7 @@ struct TesteView: View {
     @State private var item: PhotosPickerItem?
     @State private var imagem: UIImage?
     @State private var modoExtensao = true
+    @State private var telaCheia = false
 
     @State private var lendo = false
     @State private var linhas: [String] = []
@@ -26,7 +27,14 @@ struct TesteView: View {
                         .scaledToFit()
                         .frame(maxHeight: 320)
                         .frame(maxWidth: .infinity)
+                    Button {
+                        telaCheia = true
+                    } label: {
+                        Label("Mostrar em tela cheia", systemImage: "arrow.up.left.and.arrow.down.right")
+                    }
                 }
+            } footer: {
+                Text("Com a leitura da tela ligada, \"Mostrar em tela cheia\" deixa a extensão ler este print como se fosse a 99. Toque no print pra fechar.")
             }
 
             if lendo {
@@ -82,6 +90,17 @@ struct TesteView: View {
             }
         }
         .navigationTitle("Testar print")
+        .fullScreenCover(isPresented: $telaCheia) {
+            if let imagem {
+                Image(uiImage: imagem)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                    .ignoresSafeArea()
+                    .onTapGesture { telaCheia = false }
+            }
+        }
         .onChange(of: item) { novo in
             Task { await carregar(novo) }
         }
