@@ -59,7 +59,7 @@ struct ContentView: View {
             .tag(Aba.mapa)
 
             NavigationStack {
-                LinhaDoTempoView(store: linha, titulo: "Atividade").botaoPerfil(nav)
+                AtividadeView().botaoPerfil(nav)
             }
             .tabItem { Label("Atividade", systemImage: "clock") }
             .tag(Aba.atividade)
