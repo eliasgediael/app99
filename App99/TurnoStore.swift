@@ -94,6 +94,17 @@ final class TurnoStore: ObservableObject {
     /// Turno aberto e fechado sem nada não é "zero": é ausência de dado, e fica fora das listas.
     func temRegistro(_ t: Turno) -> Bool {
         if t.ativo { return true }
+        let chave = LinhaDoTempoStore.shared.eventos.count &* 31 &+ custos.count
+        if cacheRegistro.chave != chave { cacheRegistro = (chave, [:]) }
+        if let v = cacheRegistro.valores[t.id] { return v }
+        let v = calcularRegistro(t)
+        cacheRegistro.valores[t.id] = v
+        return v
+    }
+
+    private var cacheRegistro: (chave: Int, valores: [UUID: Bool]) = (-1, [:])
+
+    private func calcularRegistro(_ t: Turno) -> Bool {
         if custos.contains(where: { $0.turno == t.id || ($0.turno == nil && t.contem($0.em)) }) { return true }
         let eventos = LinhaDoTempoStore.shared.eventos.filter { $0.seq > 0 && t.contem($0.data) }
         let tiposCorrida: Set<TipoEvento> = [.ofertaDetectada, .aceiteDetectado, .telaEmbarque, .passageiroABordo, .fimDetectado]
