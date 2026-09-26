@@ -85,6 +85,10 @@ struct PerfilView: View {
                 Text("Envia à Apple o centro aproximado de cada região (~1 km) para obter o nome do bairro.")
             }
 
+            Section {
+                LabeledContent("Versão", value: Self.versao)
+            }
+
             Section("Diagnóstico") {
                 NavigationLink("Testar com um print") { TesteView() }
                 NavigationLink("Linha do tempo técnica") { LinhaDoTempoView(store: linha, titulo: "Linha do tempo técnica") }
@@ -115,6 +119,13 @@ struct PerfilView: View {
                 falarResultado = false
             }
         }
+    }
+
+    static var versao: String {
+        let i = Bundle.main.infoDictionary
+        let v = i?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = i?["CFBundleVersion"] as? String ?? "?"
+        return "\(v) (\(b))"
     }
 
     private static var arquivos: [URL] {

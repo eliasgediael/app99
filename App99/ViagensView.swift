@@ -5,7 +5,7 @@ import SwiftUI
 struct ViagensView: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared
-    @State private var periodo: Periodo = .hoje
+    @State private var periodo: Periodo = .ultimos7
     @State private var modo = Modo.corridas
 
     enum Modo: Hashable { case corridas, ofertas }

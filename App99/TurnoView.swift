@@ -38,71 +38,51 @@ struct PainelTurno: View {
 
     private var semTurno: some View {
         let registrados = turnos.turnosComRegistro
-        let semana = ResumoAgregado(resumos: Historico.turnos(registrados, em: .ultimos7).map { turnos.resumo($0) })
         let trabalhouHoje = !Historico.turnos(registrados, em: .hoje).isEmpty
         let ultimo = registrados.last { !$0.ativo }
+        let r = ultimo.map { turnos.resumo($0) }
+        let comLeitura = r?.temLeitura ?? false
         return ScrollView {
-            VStack(alignment: .leading, spacing: Espaco.xxl) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(Datas.longaTitulo(Date()))
-                        .font(Tipo.apoio)
-                        .foregroundStyle(Tema.textoSecundario)
-                    if trabalhouHoje {
-                        Text(Formato.reais(confirmadoHoje))
+            VStack(spacing: Espaco.xl) {
+                Pilula(texto: "SEM TURNO ATIVO", cor: Tema.textoSecundario, fundo: Tema.superficieAlta)
+
+                if let u = ultimo, let r {
+                    VStack(spacing: 6) {
+                        Text(comLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")
                             .font(Tipo.heroi)
                             .monospacedDigit()
                             .foregroundStyle(Tema.texto)
                             .lineLimit(1)
                             .minimumScaleFactor(0.5)
-                        Text("hoje")
+                        Text((comLeitura ? "(" + Datas.corridas(r.corridasConfirmadas) + ") · " : "")
+                             + "último turno, " + Datas.curta(u.inicio))
                             .font(Tipo.apoio)
                             .foregroundStyle(Tema.textoSecundario)
-                    } else {
-                        Text("Sem turno hoje")
-                            .font(.largeTitle.weight(.bold))
-                            .foregroundStyle(Tema.texto)
-                    }
-                    if metaDiaria > 0 && trabalhouHoje {
-                        BarraMeta(valor: confirmadoHoje, meta: metaDiaria).padding(.top, 6)
-                    }
-                }
-
-                if semana.turnos > 0 {
-                    Secao("Últimos 7 dias") {
-                        GradeMetricas {
-                            Metrica(Formato.reais(semana.confirmado), "faturamento")
-                            Metrica(semana.porHora, "por hora") { Formato.reais($0) }
-                            Metrica("\(semana.corridasConfirmadas)", "corridas")
+                        if metaDiaria > 0 && trabalhouHoje {
+                            BarraMeta(valor: confirmadoHoje, meta: metaDiaria).padding(.top, 8)
                         }
                     }
-                }
 
-                if let u = ultimo {
-                    let r = turnos.resumo(u)
-                    Secao("Último turno") {
-                        NavigationLink { ResumoTurnoView(turno: u) } label: {
-                            HStack(alignment: .center, spacing: Espaco.m) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(ResumoTurnoView.titulo(u))
-                                        .font(Tipo.apoio.weight(.medium))
-                                        .foregroundStyle(Tema.texto)
-                                    Text(Duracao.curta(r.duracao.valor ?? 0) + (r.temLeitura ? " · " + Datas.corridas(r.corridasConfirmadas) : ""))
-                                        .font(Tipo.legenda)
-                                        .foregroundStyle(Tema.textoSecundario)
-                                }
-                                Spacer()
-                                Text(r.temLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")
-                                    .font(Tipo.valor)
-                                    .monospacedDigit()
-                                    .foregroundStyle(Tema.texto)
-                                Image(systemName: "chevron.right")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(Tema.textoTerciario)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
+                    HStack(spacing: 0) {
+                        ritmo("Por hora", comLeitura ? r.porHora.texto({ Formato.reais($0) + "/h" }) : "—")
+                        Rectangle().fill(Tema.linha).frame(width: 1, height: 44)
+                        ritmo("Por km", comLeitura ? r.porKm.texto({ Formato.reais($0) + "/km" }) : "—")
                     }
+
+                    if let o = r.ofertas.last {
+                        VStack(alignment: .leading, spacing: Espaco.s) {
+                            Text("Última oferta").font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.textoSecundario)
+                            cartaoOferta(o)
+                        }
+                    }
+
+                    NavigationLink { ResumoTurnoView(turno: u) } label: {
+                        LinhaNavegacao("Resumo do último turno", "chart.bar.doc.horizontal",
+                                       Duracao.curta(r.duracao.valor ?? 0))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    EstadoVazio(icone: "gauge.medium", titulo: "Nenhum turno registrado")
                 }
             }
             .padding(.horizontal, Espaco.margem)
@@ -117,10 +97,10 @@ struct PainelTurno: View {
                 } label: {
                     Label("Iniciar turno", systemImage: "play.fill")
                 }
-                .buttonStyle(BotaoPrimario())
+                .buttonStyle(BotaoPrimario(cor: Tema.positivo))
                 Button("Registrar abastecimento") { abastecendo = true }
                     .font(Tipo.apoio.weight(.semibold))
-                    .foregroundStyle(Tema.primaria)
+                    .foregroundStyle(Tema.textoSecundario)
                     .frame(minHeight: 36)
             }
             .padding(.horizontal, Espaco.margem)
