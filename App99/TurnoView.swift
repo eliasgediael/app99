@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Aba Turno: painel de operação.
 struct PainelTurno: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared

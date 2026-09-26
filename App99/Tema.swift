@@ -173,7 +173,6 @@ struct GradeMetricas<Conteudo: View>: View {
     }
 }
 
-/// Linha "rótulo ........ valor".
 struct LinhaMetrica: View {
     let titulo: String
     let valor: String
@@ -302,7 +301,6 @@ struct ChipFiltro: View {
     }
 }
 
-/// Fileira de chips que rola na horizontal.
 struct FiltrosChips<Valor: Hashable>: View {
     let opcoes: [Valor]
     let nome: (Valor) -> String

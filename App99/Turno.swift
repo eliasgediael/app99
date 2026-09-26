@@ -95,7 +95,6 @@ struct Coordenada: Codable, Equatable {
     }
 }
 
-/// Um ponto do GPS (a coleta entra na Fase 3; o modelo e os filtros já ficam prontos).
 struct PontoGPS: Codable, Equatable {
     var em: Date
     var coord: Coordenada

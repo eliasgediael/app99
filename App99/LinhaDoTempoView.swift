@@ -121,7 +121,7 @@ struct LinhaDoTempoView: View {
     var body: some View {
         List {
             if eventos.isEmpty {
-                Text("Nenhum evento ainda. Os eventos chegam enquanto a leitura está ligada e este app aberto.")
+                Text("Nenhum evento")
                     .foregroundStyle(.secondary)
             }
             ForEach(porDia, id: \.dia) { grupo in

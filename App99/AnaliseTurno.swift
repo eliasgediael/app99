@@ -149,17 +149,14 @@ struct ResumoTurno {
     var trajeto = Trajeto()
     var temGPS = false
 
-    // Tempo
     var duracao = Medida(valor: 0, confianca: .confirmado, fonte: .relogio)
     var tempoPorEstado: [EstadoMotorista: TimeInterval] = [:]
     var tempoParado = Medida.indeterminada(.gps, "sem GPS")
     var tempoSemSinalGPS: TimeInterval = 0
 
-    // Distância
     var km = Medida.indeterminada(.gps, "sem GPS")
     var kmPorEstado: [EstadoMotorista: Double] = [:]
 
-    // Financeiro
     var faturamentoConfirmado = Medida(valor: 0, confianca: .confirmado, fonte: .tela)
     var faturamentoEstimado = Medida(valor: 0, confianca: .estimado, fonte: .tela)
     var combustivel = Medida(valor: 0, confianca: .confirmado, fonte: .usuario,

@@ -108,7 +108,6 @@ struct MapaAbaView: View {
     private func mapa(_ r: ResumoTurno) -> some View {
         MapaTurnoView(r: r, filtro: filtro, intervalo: intervalo, corridaFoco: corridaFoco,
                       enquadrar: enquadrar) { id in aberta = CorridaAberta(id: id) }
-            .ignoresSafeArea(edges: .bottom)
             .overlay(alignment: .top) {
                 VStack(spacing: Espaco.s) {
                     ScrollView(.horizontal, showsIndicators: false) {

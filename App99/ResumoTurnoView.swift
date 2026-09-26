@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Resumo de um turno, numa tela só.
 struct ResumoTurnoView: View {
     let turno: Turno
     @ObservedObject var turnos = TurnoStore.shared

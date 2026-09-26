@@ -27,7 +27,6 @@ extension CorridaAnalisada {
     var inicioVisto: Date? { aceiteEm ?? aBordoEm ?? encerradaEm }
     var terminoVisto: Date? { fimEm ?? encerradaEm }
 
-    /// "8,2 km · 18 min"
     var resumoCurto: String {
         [kmGPS.valor.map(Formato.km), duracao.valor.map(Duracao.curta)].compactMap { $0 }.joined(separator: " · ")
     }
@@ -35,7 +34,6 @@ extension CorridaAnalisada {
 
 // MARK: - Linhas
 
-/// 21:18   R$ 8,70            8,2 km · 18 min
 struct LinhaCorrida: View {
     let c: CorridaAnalisada
 

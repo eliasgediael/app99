@@ -1,7 +1,6 @@
 import SwiftUI
 import Charts
 
-/// Aba Atividade: o dia de trabalho por hora e em linha do tempo.
 /// O dia é o dos turnos que começaram nele (igual a Viagens e Análises).
 struct AtividadeView: View {
     @ObservedObject var turnos = TurnoStore.shared
@@ -124,8 +123,6 @@ struct GraficoHoras: View {
     }
 }
 
-/// 21h   R$ 27,60                  R$ 27,60/h
-///       4 corridas · 19,0 km · 6 min livre
 struct TabelaHoras: View {
     let horas: [HoraAtividade]
     var aoTocar: ((HoraAtividade) -> Void)?
@@ -177,7 +174,6 @@ struct TabelaHoras: View {
     }
 }
 
-/// Linha do tempo visual: hora, ponto colorido e o que aconteceu.
 struct LinhaDoTempoVisual: View {
     let itens: [ItemAtividade]
 

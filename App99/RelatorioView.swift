@@ -88,36 +88,20 @@ final class RelatorioStore: ObservableObject {
 
 // MARK: - Tela
 
-/// HOJE — sex, 25/09
-/// 💵 Faturado      R$ 186,40
-/// 🔧 Custo moto    R$ 29,75
-/// 💰 Lucro         R$ 156,65
-/// 🛵 14 corridas · 85 km
-/// 📊 R$ 2,19/km médio · ⏱️ R$ 31,30/h
-/// ✅ Aceitou 14 de 41 ofertas
 struct ResumoDiaView: View {
     let dia: DiaRelatorio
 
     var body: some View {
-        LabeledContent("💵 Faturado", value: Formato.reais(dia.faturado))
-        LabeledContent("🔧 Custo moto", value: Formato.reais(dia.custo))
-        LabeledContent("💰 Lucro") {
-            Text(Formato.reais(dia.lucro)).bold().foregroundStyle(dia.lucro >= 0 ? .green : .red)
-        }
-        Text("🛵 \(dia.corridas) corrida\(dia.corridas == 1 ? "" : "s") · \(Formato.km(dia.km))")
-        Text(linhaMedias)
-        Text("✅ Aceitou \(dia.corridas) de \(dia.ofertas) oferta\(dia.ofertas == 1 ? "" : "s")")
+        LabeledContent("Faturado", value: Formato.reais(dia.faturado))
+        LabeledContent("Custo da moto", value: Formato.reais(dia.custo))
+        LabeledContent("Lucro", value: Formato.reais(dia.lucro))
+        LabeledContent("Corridas", value: "\(dia.corridas) · \(Formato.km(dia.km))")
+        LabeledContent("Ofertas aceitas", value: "\(dia.corridas) de \(dia.ofertas)")
+        LabeledContent("Por km", value: dia.porKm.map { Formato.reais($0) } ?? "—")
+        LabeledContent("Lucro por hora de leitura", value: dia.lucroPorHora.map { Formato.reais($0) } ?? "—")
         if dia.estimadas > 0 {
-            // Fora do faturamento: faltou alguma evidência (ver a linha do tempo)
-            Text("🟡 Estimado (fora do total): \(Formato.reais(dia.estimado)) · \(dia.estimadas) corrida\(dia.estimadas == 1 ? "" : "s")")
-                .foregroundStyle(.orange)
+            LabeledContent("Estimado", value: "≈ \(Formato.reais(dia.estimado)) · \(dia.estimadas)")
         }
-    }
-
-    private var linhaMedias: String {
-        let porKm = dia.porKm.map { "\(Formato.reais($0))/km médio" } ?? "— /km"
-        let porHora = dia.lucroPorHora.map { "\(Formato.reais($0))/h" } ?? "— /h"
-        return "📊 \(porKm) · ⏱️ \(porHora)"
     }
 }
 
@@ -134,8 +118,6 @@ struct RelatorioSections: View {
                 }
         } header: {
             Text("Hoje — \(Datas.curta(store.hoje.data))")
-        } footer: {
-            Text("Só entram corridas CONFIRMADAS (aceite, passageiro a bordo e fim de corrida vistos na tela). ⏱️ = lucro por hora com a leitura ligada. Prints de teste não contam.")
         }
 
         if !store.anteriores.isEmpty {

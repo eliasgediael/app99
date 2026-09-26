@@ -25,7 +25,6 @@ final class Navegacao: ObservableObject {
     }
 }
 
-/// Raiz do app: 5 abas + Perfil (canto superior direito).
 /// O ciclo de vida (GPS ao reabrir, pedidos à extensão, aviso "app na frente") fica AQUI, na raiz,
 /// pra valer igual em qualquer aba aberta.
 struct ContentView: View {
@@ -82,7 +81,7 @@ struct ContentView: View {
         }
         .onChange(of: fase) { nova in
             if nova == .active {
-                relatorio.pedir()   // atualiza ao voltar pro app
+                relatorio.pedir()
                 linha.pedir()
                 SinalApp.naFrente.enviar()
             } else {

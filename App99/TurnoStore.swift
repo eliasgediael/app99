@@ -122,7 +122,7 @@ final class TurnoStore: ObservableObject {
         LinhaDoTempoStore.shared.adicionarLocal(e)
     }
 
-    /// Apaga os trajetos dos turnos encerrados (Perfil → Dados). Devolve quantos arquivos saíram.
+    /// Apaga os trajetos dos turnos encerrados. Devolve quantos arquivos saíram.
     @discardableResult
     func apagarTrajetos() -> Int {
         var n = 0
