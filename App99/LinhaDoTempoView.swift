@@ -92,6 +92,7 @@ struct LinhaDoTempoView: View {
     @ObservedObject var store: LinhaDoTempoStore
     /// Só os eventos desse período (ex.: um turno). nil = todos.
     var intervalo: DateInterval? = nil
+    var titulo = "Linha do tempo"
 
     private var eventos: [EventoLinha] {
         guard let i = intervalo else { return store.eventos }
@@ -118,7 +119,7 @@ struct LinhaDoTempoView: View {
                 }
             }
         }
-        .navigationTitle("Linha do tempo")
+        .navigationTitle(titulo)
         .refreshable { store.pedir() }
         .onAppear { store.pedir() }
     }

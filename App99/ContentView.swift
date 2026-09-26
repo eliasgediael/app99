@@ -1,34 +1,60 @@
 import SwiftUI
 
-/// Tela inicial enxuta: painel do turno (ou Iniciar turno), histórico curto e linha do tempo.
-/// Ferramentas de teste/depuração ficam em "Mais".
+/// Abas do app. Guardadas num objeto só pra, nas próximas fases, uma tela poder abrir outra aba.
+enum Aba: Hashable { case turno, viagens, mapa, atividade, analises }
+
+@MainActor
+final class Navegacao: ObservableObject {
+    @Published var aba: Aba = .turno
+    @Published var perfilAberto = false
+}
+
+/// Raiz do app: 5 abas + Perfil (canto superior direito).
+/// O ciclo de vida (GPS ao reabrir, pedidos à extensão, aviso "app na frente") fica AQUI, na raiz,
+/// pra valer igual em qualquer aba aberta.
 struct ContentView: View {
     @StateObject private var monitor = MonitorExtensao()
     @StateObject private var relatorio = RelatorioStore()
+    @StateObject private var nav = Navegacao()
     @ObservedObject private var linha = LinhaDoTempoStore.shared   // um só, compartilhado com o turno
     @Environment(\.scenePhase) private var fase
 
     var body: some View {
-        NavigationStack {
-            List {
-                PainelTurno(monitor: monitor)
-
-                HistoricoCurto()
-
-                Section {
-                    NavigationLink {
-                        LinhaDoTempoView(store: linha)
-                    } label: {
-                        Label("Linha do tempo", systemImage: "list.bullet.rectangle")
-                    }
-                    NavigationLink {
-                        MaisView(monitor: monitor, relatorio: relatorio)
-                    } label: {
-                        Label("Mais", systemImage: "ellipsis.circle")
-                    }
-                }
+        TabView(selection: $nav.aba) {
+            NavigationStack {
+                List { PainelTurno(monitor: monitor) }
+                    .navigationTitle("Turno")
+                    .botaoPerfil(nav)
             }
-            .navigationTitle("Apex")
+            .tabItem { Label("Turno", systemImage: "speedometer") }
+            .tag(Aba.turno)
+
+            NavigationStack {
+                ViagensView().botaoPerfil(nav)
+            }
+            .tabItem { Label("Viagens", systemImage: "list.bullet") }
+            .tag(Aba.viagens)
+
+            NavigationStack {
+                MapaAbaView().botaoPerfil(nav)
+            }
+            .tabItem { Label("Mapa", systemImage: "map") }
+            .tag(Aba.mapa)
+
+            NavigationStack {
+                LinhaDoTempoView(store: linha, titulo: "Atividade").botaoPerfil(nav)
+            }
+            .tabItem { Label("Atividade", systemImage: "clock") }
+            .tag(Aba.atividade)
+
+            NavigationStack {
+                HistoricoView(titulo: "Análises").botaoPerfil(nav)
+            }
+            .tabItem { Label("Análises", systemImage: "chart.bar") }
+            .tag(Aba.analises)
+        }
+        .sheet(isPresented: $nav.perfilAberto) {
+            NavigationStack { PerfilView(monitor: monitor, relatorio: relatorio) }
         }
         .task {
             if TurnoStore.shared.atual != nil { Localizacao.shared.ligar() }   // reabriu com turno ativo
@@ -52,43 +78,16 @@ struct ContentView: View {
     }
 }
 
-/// Ferramentas e telas antigas (nada foi removido, só saiu da tela inicial).
-struct MaisView: View {
-    @ObservedObject var monitor: MonitorExtensao
-    @ObservedObject var relatorio: RelatorioStore
-
-    var body: some View {
-        List {
-            Section {
-                NavigationLink { AjustesView() } label: {
-                    Label("Configuração da moto e voz", systemImage: "gearshape")
+extension View {
+    /// Ícone do Perfil no canto superior direito de cada aba.
+    func botaoPerfil(_ nav: Navegacao) -> some View {
+        toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { nav.perfilAberto = true } label: {
+                    Image(systemName: "person.crop.circle")
                 }
-                NavigationLink { TesteView() } label: {
-                    Label("Testar com um print", systemImage: "photo.on.rectangle")
-                }
-                NavigationLink { CatalogoTemaView() } label: {
-                    Label("Visual do Apex (catálogo)", systemImage: "paintpalette")
-                }
+                .accessibilityLabel("Perfil")
             }
-
-            Section {
-                BotaoIniciarLeitura()
-            } header: {
-                Text("Só a leitura (sem turno)")
-            } footer: {
-                Text("Liga só a leitura das ofertas, sem turno e sem GPS. As notificações funcionam igual.")
-            }
-
-            Section {
-                StatusExtensaoView(monitor: monitor)
-            } header: {
-                Text("Status da leitura (ao vivo)")
-            } footer: {
-                Text("Pra testar em casa: ligue a leitura, vá em \"Testar com um print\" e toque em \"Mostrar em tela cheia\".")
-            }
-
-            RelatorioSections(store: relatorio)
         }
-        .navigationTitle("Mais")
     }
 }

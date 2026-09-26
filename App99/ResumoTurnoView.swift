@@ -221,13 +221,18 @@ private struct CorridasView: View {
                 Text("Nenhuma corrida detectada neste turno.").foregroundStyle(.secondary)
             }
             ForEach(r.corridas.reversed()) { c in
-                NavigationLink { CorridaDetalheView(c: c) } label: { linha(c) }
+                NavigationLink { CorridaDetalheView(c: c) } label: { LinhaCorrida(c: c) }
             }
         }
         .navigationTitle("Corridas")
     }
+}
 
-    private func linha(_ c: CorridaAnalisada) -> some View {
+/// Uma corrida numa lista (resumo do turno e aba Viagens).
+struct LinhaCorrida: View {
+    let c: CorridaAnalisada
+
+    var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text((c.aceiteEm ?? c.aBordoEm ?? c.encerradaEm).map { $0.formatted(date: .omitted, time: .shortened) } ?? "—")
@@ -242,7 +247,7 @@ private struct CorridasView: View {
     }
 }
 
-private struct CorridaDetalheView: View {
+struct CorridaDetalheView: View {
     let c: CorridaAnalisada
 
     var body: some View {
@@ -303,21 +308,30 @@ private struct OfertasView: View {
             }
             Section {
                 ForEach(r.ofertas.reversed()) { o in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(o.em.formatted(date: .omitted, time: .shortened)).font(.subheadline.bold())
-                            Text(([Formato.km(o.km), o.porKm.map { Formato.reais($0) + "/km" }, o.nota.map { "⭐ " + Formato.nota($0) }] as [String?])
-                                .compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(Formato.reais(Double(o.valorCent) / 100)).monospacedDigit()
-                        resultado(o)
-                    }
+                    LinhaOferta(o: o)
                 }
             }
         }
         .navigationTitle("Ofertas")
+    }
+}
+
+/// Uma oferta numa lista (resumo do turno e aba Viagens). Oferta não é faturamento.
+struct LinhaOferta: View {
+    let o: OfertaAnalisada
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(o.em.formatted(date: .omitted, time: .shortened)).font(.subheadline.bold())
+                Text(([Formato.km(o.km), o.porKm.map { Formato.reais($0) + "/km" }, o.nota.map { "⭐ " + Formato.nota($0) }] as [String?])
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(Formato.reais(Double(o.valorCent) / 100)).monospacedDigit()
+            resultado(o)
+        }
     }
 
     @ViewBuilder

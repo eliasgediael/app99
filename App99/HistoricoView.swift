@@ -119,11 +119,13 @@ struct HistoricoView: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared
     @State private var periodo: Periodo = .ultimos7
+    var titulo = "Histórico"
 
     var body: some View {
         let lista = Historico.turnos(turnos.turnos, em: periodo).sorted { $0.inicio > $1.inicio }
         let a = ResumoAgregado(resumos: lista.map { turnos.resumo($0) })
         List {
+            HistoricoCurto()
             Section {
                 Picker("Período", selection: $periodo) {
                     ForEach(Periodo.allCases, id: \.self) { Text($0.nome).tag($0) }
@@ -140,7 +142,7 @@ struct HistoricoView: View {
                 turnosLista(lista)
             }
         }
-        .navigationTitle("Histórico")
+        .navigationTitle(titulo)
     }
 
     private func principais(_ a: ResumoAgregado) -> some View {
@@ -259,7 +261,7 @@ extension Periodo {
     }
 }
 
-/// Bloco curto do histórico pra tela inicial: hoje e 7 dias, e um link pro resto.
+/// Bloco curto do histórico (hoje e 7 dias), no topo de Análises.
 struct HistoricoCurto: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared
@@ -269,9 +271,8 @@ struct HistoricoCurto: View {
             Section {
                 linhaPeriodo(.hoje)
                 linhaPeriodo(.ultimos7)
-                NavigationLink("Ver histórico") { HistoricoView() }
             } header: {
-                Text("Histórico")
+                Text("Resumo rápido")
             }
         }
     }
