@@ -78,7 +78,7 @@ enum EstadoMotorista: String, CaseIterable {
     var nome: String {
         switch self {
         case .aguardando: return "Aguardando"
-        case .aCaminho:   return "Indo buscar"
+        case .aCaminho:   return "Em busca"
         case .emCorrida:  return "Em corrida"
         case .pausado:    return "Pausado"
         case .semLeitura: return "Sem leitura"

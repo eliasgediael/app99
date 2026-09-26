@@ -8,23 +8,23 @@ import UIKit
 // MARK: - Cores
 
 enum Tema {
-    static let fundo            = Color(claro: 0xF5F7F9, escuro: 0x0A0E13)
-    static let superficie       = Color(claro: 0xFFFFFF, escuro: 0x121920)
-    static let superficieAlta   = Color(claro: 0xE8ECF0, escuro: 0x1C2530)
-    static let linha            = Color(claro: 0xDDE3E8, escuro: 0x222C38)
+    static let fundo            = Color(claro: 0xF5F7F9, escuro: 0x0D0F12)
+    static let superficie       = Color(claro: 0xFFFFFF, escuro: 0x16191E)
+    static let superficieAlta   = Color(claro: 0xE8ECF0, escuro: 0x1E222A)
+    static let linha            = Color(claro: 0xDDE3E8, escuro: 0x232730)
 
-    static let texto            = Color(claro: 0x0E151C, escuro: 0xECF1F5)
-    static let textoSecundario  = Color(claro: 0x5A6776, escuro: 0x9AA7B5)
-    static let textoTerciario   = Color(claro: 0x8C97A4, escuro: 0x5F6B78)
+    static let texto            = Color(claro: 0x0E151C, escuro: 0xE9EDF2)
+    static let textoSecundario  = Color(claro: 0x5A6776, escuro: 0x9AA3AE)
+    static let textoTerciario   = Color(claro: 0x8C97A4, escuro: 0x5E6672)
 
     static let primaria         = Color(claro: 0x15627C, escuro: 0x2B8FB3)
-    static let positivo         = Color(claro: 0x12A06A, escuro: 0x3DDC97)
+    static let positivo         = Color(claro: 0x0E9F6E, escuro: 0x10B981)
     static let atencao          = Color(claro: 0xB7801B, escuro: 0xF2B84B)
     static let erro             = Color(claro: 0xC43C3C, escuro: 0xEF5B5B)
-    static let neutro           = Color(claro: 0x7D8A9A, escuro: 0x7D8A9A)
+    static let neutro           = Color(claro: 0x64748B, escuro: 0x64748B)
 
     static let mapaEmCorrida    = positivo
-    static let mapaIndoBuscar   = Color(claro: 0x2A86B0, escuro: 0x4BA8D4)
+    static let mapaIndoBuscar   = Color(claro: 0x1FAE7E, escuro: 0x34D399)
     static let mapaSemCorrida   = neutro
     static let abastecimento    = Color(claro: 0x7B5CC4, escuro: 0xA58BF0)
 }
@@ -46,8 +46,9 @@ extension UIColor {
 // MARK: - Tipografia, espaço, forma
 
 enum Tipo {
-    static let heroi    = Font.system(size: 58, weight: .bold, design: .rounded)
+    static let heroi    = Font.system(size: 50, weight: .bold, design: .rounded)
     static let destaque = Font.system(size: 40, weight: .bold, design: .rounded)
+    static let porHora  = Font.system(size: 28, weight: .bold, design: .rounded)
     static let metrica  = Font.system(size: 22, weight: .semibold, design: .rounded)
     static let valor    = Font.system(.body, design: .rounded).weight(.semibold)
     static let titulo   = Font.title3.weight(.semibold)
@@ -399,16 +400,18 @@ struct BarraEstados: View {
                     }
                 }
             }
-            .frame(height: 12)
+            .frame(height: 10)
+            .clipShape(Capsule())
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
                       alignment: .leading, spacing: Espaco.s) {
                 ForEach(lista) { item in
                     HStack(spacing: 6) {
                         Circle().fill(item.estado.cor).frame(width: 7, height: 7)
                         Text(item.estado.nome).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario)
-                        Text(Duracao.curta(item.segundos)).font(Tipo.legenda.weight(.semibold)).monospacedDigit()
-                            .foregroundStyle(Tema.texto)
+                        Text(String(format: "%.0f%%", item.segundos / total * 100)).font(Tipo.legenda.weight(.semibold))
+                            .monospacedDigit().foregroundStyle(Tema.texto)
                     }
+                    .accessibilityLabel("\(item.estado.nome): \(Duracao.curta(item.segundos))")
                 }
             }
         }
@@ -440,6 +443,26 @@ struct BarraMeta: View {
     }
 }
 
+/// Pílula discreta: valor do ponto tocado num gráfico, status do turno.
+struct Pilula: View {
+    let texto: String
+    var cor: Color = Tema.texto
+    var fundo: Color = Tema.superficie
+
+    var body: some View {
+        Text(texto)
+            .font(Tipo.legenda.weight(.semibold))
+            .monospacedDigit()
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(fundo, in: Capsule())
+            .overlay(Capsule().stroke(Tema.linha, lineWidth: 1))
+            .foregroundStyle(cor)
+            .fixedSize()
+    }
+}
+
 // MARK: - Estados da operação
 
 extension EstadoMotorista {
@@ -460,6 +483,12 @@ extension Datas {
     static func hora(_ d: Date) -> String { d.formatted(date: .omitted, time: .shortened) }
 
     static func corridas(_ n: Int) -> String { n == 1 ? "1 corrida" : "\(n) corridas" }
+
+    /// "Sexta-feira, 25 de setembro"
+    static func extensa(_ d: Date) -> String {
+        let t = d.formatted(.dateTime.weekday(.wide).day().month(.wide).locale(Locale(identifier: "pt_BR")))
+        return t.prefix(1).uppercased() + t.dropFirst()
+    }
 
     /// "Sábado, 26 de set." (só a primeira letra maiúscula)
     static func longaTitulo(_ d: Date) -> String {

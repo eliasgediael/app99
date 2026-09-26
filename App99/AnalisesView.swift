@@ -22,15 +22,15 @@ struct AnalisesView: View {
                     EstadoVazio(icone: "chart.bar", titulo: "Sem dados neste período")
                 } else {
                     topo(a, antes: antes)
-                    indicadores(a)
-                    let horas = a.horasDoDia
-                    if !horas.isEmpty {
-                        Secao("Por hora") { GraficoHoras(horas: horas) }
-                    }
-                    porDia(a)
                     if !a.tempoPorEstado.isEmpty {
                         Secao("Tempo") { BarraEstados(tempos: a.tempoPorEstado) }
                     }
+                    let horas = a.horasDoDia
+                    if !horas.isEmpty {
+                        Secao("Faturamento por hora") { GraficoHoras(horas: horas) }
+                    }
+                    indicadores(a)
+                    porDia(a)
                     regioes(a)
                     rotas(a)
                     depois(a)
@@ -48,13 +48,15 @@ struct AnalisesView: View {
 
     private func topo(_ a: ResumoAgregado, antes: ResumoAgregado) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            RotuloSecao("Faturamento")
             Text(Formato.reais(a.confirmado))
-                .font(Tipo.destaque)
+                .font(Tipo.heroi)
                 .monospacedDigit()
                 .foregroundStyle(Tema.texto)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
+            Text("Faturamento total (\(periodo.nome.lowercased()))")
+                .font(Tipo.apoio)
+                .foregroundStyle(Tema.textoSecundario)
             // Só compara quando o período anterior tem turnos e faturamento
             if antes.turnos > 0, antes.confirmado > 0 {
                 let d = (a.confirmado - antes.confirmado) / antes.confirmado
@@ -209,50 +211,59 @@ struct ResumoDia: Identifiable {
     var agregado: ResumoAgregado { ResumoAgregado(resumos: resumos) }
 }
 
-/// Barras por dia (só dias com turno). Tocar numa barra mostra o dia.
+/// Barras por dia (só dias com turno: dia sem turno é hiato, não zero). Toque seleciona; começa no pico.
 struct GraficoDias: View {
     let dias: [ResumoDia]
     @State private var selecionado: Date?
 
+    private var pico: ResumoDia? { dias.max { $0.agregado.confirmado < $1.agregado.confirmado } }
+
     var body: some View {
-        let atual = dias.first { $0.dia == selecionado } ?? dias.last
-        VStack(alignment: .leading, spacing: Espaco.m) {
-            if let d = atual {
-                let a = d.agregado
-                DestaqueGrafico(titulo: Datas.longaTitulo(d.dia), valor: Formato.reais(a.confirmado),
-                                detalhe: Self.detalhe(a))
-            }
+        let atual = dias.first { $0.dia == selecionado } ?? pico
+        VStack(alignment: .leading, spacing: Espaco.s) {
             Chart(dias) { d in
                 BarMark(x: .value("Dia", d.dia, unit: .day), y: .value("R$", d.agregado.confirmado))
-                    .foregroundStyle(Tema.primaria.opacity(d.dia == atual?.dia ? 1 : 0.35))
-                    .cornerRadius(3)
+                    .foregroundStyle(Tema.positivo.opacity(d.dia == atual?.dia ? 1 : 0.3))
+                    .cornerRadius(4)
             }
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day, count: dias.count > 10 ? 5 : 1)) { _ in
                     AxisValueLabel(format: .dateTime.day().month(.defaultDigits))
+                        .foregroundStyle(Tema.textoTerciario)
                 }
             }
             .chartYAxis {
                 AxisMarks(position: .leading) { v in
                     AxisGridLine().foregroundStyle(Tema.linha)
                     AxisValueLabel { if let n = v.as(Double.self) { Text("\(Int(n))") } }
+                        .foregroundStyle(Tema.textoTerciario)
                 }
             }
             .chartOverlay { proxy in
                 GeometryReader { geo in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onTapGesture { ponto in
-                            let x = ponto.x - geo[proxy.plotAreaFrame].origin.x
-                            guard let alvo = proxy.value(atX: x, as: Date.self) else { return }
-                            selecionado = dias.min {
-                                abs($0.dia.addingTimeInterval(43_200).timeIntervalSince(alvo))
-                                    < abs($1.dia.addingTimeInterval(43_200).timeIntervalSince(alvo))
-                            }?.dia
+                    let area = geo[proxy.plotAreaFrame]
+                    ZStack {
+                        Rectangle().fill(.clear).contentShape(Rectangle())
+                            .onTapGesture { ponto in
+                                guard let alvo = proxy.value(atX: ponto.x - area.origin.x, as: Date.self) else { return }
+                                selecionado = dias.min {
+                                    abs($0.dia.addingTimeInterval(43_200).timeIntervalSince(alvo))
+                                        < abs($1.dia.addingTimeInterval(43_200).timeIntervalSince(alvo))
+                                }?.dia
+                            }
+                        if let d = atual, let x = proxy.position(forX: d.dia.addingTimeInterval(43_200)) {
+                            PilulaSobreBarra(texto: Datas.curta(d.dia) + " • " + Formato.reais(d.agregado.confirmado),
+                                             x: area.origin.x + x, largura: geo.size.width, topo: area.minY)
                         }
+                    }
                 }
             }
             .frame(height: 150)
+            .padding(.top, 34)
             .accessibilityLabel("Faturamento por dia")
+            if let d = atual {
+                DetalheGrafico(texto: Self.detalhe(d.agregado))
+            }
         }
     }
 

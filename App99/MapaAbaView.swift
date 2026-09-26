@@ -126,6 +126,7 @@ struct MapaAbaView: View {
                         }
                         .padding(.horizontal, Espaco.margem)
                     }
+                    legenda
                     if let texto = textoFoco(r) {
                         Button(action: limparFoco) {
                             HStack(spacing: 6) {
@@ -144,17 +145,26 @@ struct MapaAbaView: View {
                 .padding(.top, Espaco.s)
             }
             .overlay(alignment: .bottom) {
-                HStack(alignment: .bottom) {
-                    legenda
-                    Spacer()
-                    Button { enquadrar += 1 } label: {
+                ZStack {
+                    Text(resumoMapa(r))
+                        .font(Tipo.apoio.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Tema.texto)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 40)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(Tema.linha, lineWidth: 1))
+                    HStack {
+                        Spacer()
+                        Button { enquadrar += 1 } label: {
                         Image(systemName: "scope")
                             .font(.body.weight(.semibold))
                             .frame(width: 44, height: 44)
                             .background(.regularMaterial, in: Circle())
                             .foregroundStyle(Tema.primaria)
                     }
-                    .accessibilityLabel("Enquadrar")
+                        .accessibilityLabel("Enquadrar")
+                    }
                 }
                 .padding(.horizontal, Espaco.margem)
                 .padding(.bottom, Espaco.m)
@@ -178,6 +188,13 @@ struct MapaAbaView: View {
         .padding(.horizontal, 12)
         .frame(minHeight: 32)
         .background(.regularMaterial, in: Capsule())
+    }
+
+    private func resumoMapa(_ r: ResumoTurno) -> String {
+        var p: [String] = []
+        if let km = r.km.valor { p.append(Formato.km(km) + " rodados") }
+        if r.temLeitura { p.append(Datas.corridas(r.corridasConfirmadas)) }
+        return p.isEmpty ? "—" : p.joined(separator: " · ")
     }
 
     private func item(_ nome: String, _ cor: Color) -> some View {
@@ -233,6 +250,8 @@ struct MapaTurnoView: UIViewRepresentable {
         let mapa = MKMapView()
         mapa.delegate = context.coordinator
         mapa.pointOfInterestFilter = .excludingAll
+        mapa.overrideUserInterfaceStyle = .dark
+        mapa.preferredConfiguration = MKStandardMapConfiguration(emphasisStyle: .muted)
         mapa.isUserInteractionEnabled = interativo
         mapa.showsCompass = interativo
         return mapa
@@ -287,10 +306,12 @@ struct MapaTurnoView: UIViewRepresentable {
                 grupos.append((estilo, [de, para]))
             }
         }
-        // Fundo primeiro (fica por baixo)
-        for g in grupos.sorted(by: { ($0.estilo == "fundo" ? 0 : 1) < ($1.estilo == "fundo" ? 0 : 1) }) {
+        // Fundo por baixo, depois o brilho e por cima as linhas coloridas
+        let fundo = grupos.filter { $0.estilo == "fundo" }
+        let cores = grupos.filter { $0.estilo != "fundo" }
+        for (g, titulo) in fundo.map({ ($0, $0.estilo) }) + cores.map({ ($0, "brilho|" + $0.estilo) }) + cores.map({ ($0, $0.estilo) }) {
             let linha = MKPolyline(coordinates: g.pontos, count: g.pontos.count)
-            linha.title = g.estilo
+            linha.title = titulo
             mapa.addOverlay(linha)
         }
 
@@ -367,7 +388,15 @@ struct MapaTurnoView: UIViewRepresentable {
             let r = MKPolylineRenderer(overlay: overlay)
             r.lineCap = .round
             r.lineJoin = .round
-            let estilo = overlay.title.flatMap { $0 } ?? ""
+            var estilo = overlay.title.flatMap { $0 } ?? ""
+            let brilho = estilo.hasPrefix("brilho|")
+            if brilho { estilo.removeFirst("brilho|".count) }
+            defer {
+                if brilho {
+                    r.strokeColor = r.strokeColor?.withAlphaComponent(0.22)
+                    r.lineWidth = 12
+                }
+            }
             switch EstadoMotorista(rawValue: estilo) {
             case .emCorrida?:  r.strokeColor = UIColor(Tema.mapaEmCorrida); r.lineWidth = 5
             case .aCaminho?:   r.strokeColor = UIColor(Tema.mapaIndoBuscar); r.lineWidth = 5
@@ -381,27 +410,54 @@ struct MapaTurnoView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
             guard let m = annotation as? Marca else { return nil }
-            let v = MKMarkerAnnotationView(annotation: m, reuseIdentifier: nil)
+            let v = MKAnnotationView(annotation: m, reuseIdentifier: nil)
             v.canShowCallout = true
             switch m.tipo {
             case .embarque:
-                v.markerTintColor = UIColor(Tema.positivo)
-                v.glyphImage = UIImage(systemName: "person.fill")
+                v.image = Self.ponto(UIColor(Tema.positivo), 10)
             case .desembarque:
-                v.markerTintColor = UIColor(Tema.primaria)
-                v.glyphImage = UIImage(systemName: "flag.fill")
+                let img = Self.pilula(m.title ?? "", UIColor(Tema.mapaIndoBuscar))
+                v.image = img
+                v.centerOffset = CGPoint(x: 0, y: -img.size.height / 2 - 2)
             case .oferta:
-                v.markerTintColor = UIColor(Tema.neutro)
-                v.glyphImage = UIImage(systemName: "tag.fill")
+                v.image = Self.ponto(UIColor(Tema.neutro), 7)
                 v.displayPriority = .defaultLow
             case .abastecimento:
-                v.markerTintColor = UIColor(Tema.abastecimento)
-                v.glyphImage = UIImage(systemName: "fuelpump.fill")
+                v.image = Self.ponto(UIColor(Tema.abastecimento), 9)
             }
             if m.corrida != nil {
                 v.rightCalloutAccessoryView = UIButton(type: .detailDisclosure)
             }
             return v
+        }
+
+        static func ponto(_ cor: UIColor, _ d: CGFloat) -> UIImage {
+            let t = d + 4
+            return UIGraphicsImageRenderer(size: CGSize(width: t, height: t)).image { ctx in
+                UIColor(hex: 0x0D0F12).setFill()
+                ctx.cgContext.fillEllipse(in: CGRect(x: 0, y: 0, width: t, height: t))
+                cor.setFill()
+                ctx.cgContext.fillEllipse(in: CGRect(x: 2, y: 2, width: d, height: d))
+            }
+        }
+
+        static func pilula(_ texto: String, _ cor: UIColor) -> UIImage {
+            let atributos: [NSAttributedString.Key: Any] = [
+                .font: UIFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
+                .foregroundColor: cor,
+            ]
+            let tamanho = (texto as NSString).size(withAttributes: atributos)
+            let caixa = CGSize(width: ceil(tamanho.width) + 14, height: ceil(tamanho.height) + 6)
+            return UIGraphicsImageRenderer(size: caixa).image { _ in
+                let forma = UIBezierPath(roundedRect: CGRect(origin: .zero, size: caixa).insetBy(dx: 0.5, dy: 0.5),
+                                         cornerRadius: caixa.height / 2)
+                UIColor(hex: 0x0D0F12).withAlphaComponent(0.92).setFill()
+                forma.fill()
+                UIColor(hex: 0x232730).setStroke()
+                forma.lineWidth = 1
+                forma.stroke()
+                (texto as NSString).draw(at: CGPoint(x: 7, y: 3), withAttributes: atributos)
+            }
         }
 
         func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {

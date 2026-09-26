@@ -23,6 +23,10 @@ struct AtividadeView: View {
             VStack(alignment: .leading, spacing: Espaco.xxl) {
                 if let dia {
                     cabecalho(dia, dias: dias, resumos: resumos)
+                    let tempos = ResumoAgregado(resumos: resumos).tempoPorEstado
+                    if resumos.contains(where: { $0.temLeitura }) && !tempos.isEmpty {
+                        Secao("Tempo") { BarraEstados(tempos: tempos) }
+                    }
                     let horas = Horas.porHora(resumos)
                     if !horas.isEmpty {
                         Secao("Por hora") {
@@ -66,7 +70,7 @@ struct AtividadeView: View {
             .accessibilityLabel("Dia anterior")
             Spacer()
             VStack(spacing: 2) {
-                Text(Datas.longaTitulo(dia))
+                Text(Datas.extensa(dia))
                     .font(Tipo.apoio)
                     .foregroundStyle(Tema.textoSecundario)
                 Text(comLeitura ? Formato.reais(a.confirmado) : "—")
@@ -90,88 +94,108 @@ struct AtividadeView: View {
 
 // MARK: - Gráficos
 
-/// Valor da barra tocada, logo acima do gráfico.
-struct DestaqueGrafico: View {
-    let titulo: String
-    let valor: String
-    let detalhe: String
+/// Linha logo abaixo do gráfico com os números do ponto selecionado.
+struct DetalheGrafico: View {
+    let texto: String
     var acao: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .center, spacing: Espaco.m) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(titulo).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario)
-                Text(valor).font(Tipo.metrica).monospacedDigit().foregroundStyle(Tema.texto)
-                if !detalhe.isEmpty {
-                    Text(detalhe).font(Tipo.legenda).monospacedDigit().foregroundStyle(Tema.textoSecundario)
-                }
-            }
+        HStack(spacing: Espaco.m) {
+            Text(texto)
+                .font(Tipo.legenda)
+                .monospacedDigit()
+                .foregroundStyle(Tema.textoSecundario)
             Spacer(minLength: 0)
             if let acao {
                 Button(action: acao) {
                     Image(systemName: "map")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 40, height: 40)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(width: 36, height: 36)
                         .background(Tema.superficieAlta, in: Circle())
                         .foregroundStyle(Tema.primaria)
                 }
                 .accessibilityLabel("Ver no mapa")
             }
         }
-        .frame(minHeight: 64, alignment: .leading)
+        .frame(minHeight: 36)
     }
 }
 
-/// Barras por hora (confirmado + estimado empilhados). Tocar numa barra mostra a hora.
+/// Posiciona a pílula sobre a barra selecionada, sem sair das bordas do gráfico.
+struct PilulaSobreBarra: View {
+    let texto: String
+    let x: CGFloat
+    let largura: CGFloat
+    let topo: CGFloat
+
+    var body: some View {
+        let meia: CGFloat = 78
+        Pilula(texto: texto)
+            .position(x: min(max(x, meia), max(meia, largura - meia)), y: topo - 20)
+            .allowsHitTesting(false)
+    }
+}
+
+/// Barras por hora (confirmado + estimado empilhados). Toque seleciona; começa no pico.
 struct GraficoHoras: View {
     let horas: [HoraAtividade]
     var aoAbrirMapa: ((HoraAtividade) -> Void)?
     @State private var selecionada: Date?
 
+    private var pico: HoraAtividade? { horas.max { $0.confirmado < $1.confirmado } }
+
     var body: some View {
-        let atual = horas.first { $0.inicio == selecionada } ?? horas.last
-        VStack(alignment: .leading, spacing: Espaco.m) {
-            if let h = atual {
-                DestaqueGrafico(titulo: h.intervaloTexto, valor: Formato.reais(h.confirmado), detalhe: Self.detalhe(h),
-                                acao: acaoMapa(h))
-            }
+        let atual = horas.first { $0.inicio == selecionada } ?? pico
+        VStack(alignment: .leading, spacing: Espaco.s) {
             if horas.contains(where: { $0.confirmado + $0.estimado > 0 }) {
-            Chart {
-                ForEach(horas) { h in
-                    BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.confirmado))
-                        .foregroundStyle(Tema.positivo.opacity(h.inicio == atual?.inicio ? 1 : 0.35))
-                        .cornerRadius(3)
-                    BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.estimado))
-                        .foregroundStyle(Tema.atencao.opacity(h.inicio == atual?.inicio ? 0.8 : 0.3))
-                        .cornerRadius(3)
+                Chart {
+                    ForEach(horas) { h in
+                        BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.confirmado))
+                            .foregroundStyle(Tema.positivo.opacity(h.inicio == atual?.inicio ? 1 : 0.3))
+                            .cornerRadius(4)
+                        BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.estimado))
+                            .foregroundStyle(Tema.atencao.opacity(h.inicio == atual?.inicio ? 0.8 : 0.25))
+                            .cornerRadius(4)
+                    }
                 }
-            }
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .hour, count: horas.count > 8 ? 3 : 1)) { _ in
-                    AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
+                .chartXAxis {
+                    AxisMarks(values: .stride(by: .hour, count: horas.count > 8 ? 3 : 1)) { _ in
+                        AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
+                            .foregroundStyle(Tema.textoTerciario)
+                    }
                 }
-            }
-            .chartYAxis {
-                AxisMarks(position: .leading) { v in
-                    AxisGridLine().foregroundStyle(Tema.linha)
-                    AxisValueLabel { if let n = v.as(Double.self) { Text("\(Int(n))") } }
+                .chartYAxis {
+                    AxisMarks(position: .leading) { v in
+                        AxisGridLine().foregroundStyle(Tema.linha)
+                        AxisValueLabel { if let n = v.as(Double.self) { Text("\(Int(n))") } }
+                            .foregroundStyle(Tema.textoTerciario)
+                    }
                 }
-            }
-            .chartOverlay { proxy in
-                GeometryReader { geo in
-                    Rectangle().fill(.clear).contentShape(Rectangle())
-                        .onTapGesture { ponto in
-                            let x = ponto.x - geo[proxy.plotAreaFrame].origin.x
-                            guard let d = proxy.value(atX: x, as: Date.self) else { return }
-                            selecionada = horas.min {
-                                abs($0.inicio.addingTimeInterval(1800).timeIntervalSince(d))
-                                    < abs($1.inicio.addingTimeInterval(1800).timeIntervalSince(d))
-                            }?.inicio
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        let area = geo[proxy.plotAreaFrame]
+                        ZStack {
+                            Rectangle().fill(.clear).contentShape(Rectangle())
+                                .onTapGesture { ponto in
+                                    guard let d = proxy.value(atX: ponto.x - area.origin.x, as: Date.self) else { return }
+                                    selecionada = horas.min {
+                                        abs($0.inicio.addingTimeInterval(1800).timeIntervalSince(d))
+                                            < abs($1.inicio.addingTimeInterval(1800).timeIntervalSince(d))
+                                    }?.inicio
+                                }
+                            if let h = atual, let x = proxy.position(forX: h.inicio.addingTimeInterval(1800)) {
+                                PilulaSobreBarra(texto: Self.pilula(h), x: area.origin.x + x,
+                                                 largura: geo.size.width, topo: area.minY)
+                            }
                         }
+                    }
                 }
+                .frame(height: 160)
+                .padding(.top, 34)
+                .accessibilityLabel("Faturamento por hora")
             }
-            .frame(height: 160)
-            .accessibilityLabel("Faturamento por hora")
+            if let h = atual {
+                DetalheGrafico(texto: Self.detalhe(h), acao: acaoMapa(h))
             }
         }
     }
@@ -181,12 +205,15 @@ struct GraficoHoras: View {
         return { abrir(h) }
     }
 
+    static func pilula(_ h: HoraAtividade) -> String {
+        h.intervaloTexto + " • " + (h.porHora.map { Formato.reais($0) + "/h" } ?? Formato.reais(h.confirmado))
+    }
+
     static func detalhe(_ h: HoraAtividade) -> String {
-        var p = [Datas.corridas(h.corridas)]
+        var p = [Formato.reais(h.confirmado), Datas.corridas(h.corridas)]
         if h.estimadas > 0 { p.append("\(h.estimadas) ≈") }
         if h.comGPS { p.append(Formato.km(h.km)) }
         if h.semCorrida >= 60 { p.append(Duracao.curta(h.semCorrida) + " sem corrida") }
-        if let ph = h.porHora { p.append(Formato.reais(ph) + "/h") }
         return p.joined(separator: " · ")
     }
 }

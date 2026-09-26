@@ -39,38 +39,40 @@ struct ContentView: View {
             NavigationStack {
                 PainelTurno(monitor: monitor)
                     .navigationTitle("Turno")
-                    .botaoPerfil(nav)
+                    .estiloAba(nav)
             }
             .tabItem { Label("Turno", systemImage: "speedometer") }
             .tag(Aba.turno)
 
             NavigationStack {
-                ViagensView().botaoPerfil(nav)
+                ViagensView().estiloAba(nav)
             }
-            .tabItem { Label("Viagens", systemImage: "list.bullet.rectangle.portrait") }
+            .tabItem { Label("Viagens", systemImage: "list.bullet") }
             .tag(Aba.viagens)
 
             NavigationStack {
-                MapaAbaView().botaoPerfil(nav)
+                MapaAbaView().estiloAba(nav)
             }
             .tabItem { Label("Mapa", systemImage: "map") }
             .tag(Aba.mapa)
 
             NavigationStack {
-                AtividadeView().botaoPerfil(nav)
+                AtividadeView().estiloAba(nav)
             }
             .tabItem { Label("Atividade", systemImage: "clock") }
             .tag(Aba.atividade)
 
             NavigationStack {
-                AnalisesView().botaoPerfil(nav)
+                AnalisesView().estiloAba(nav)
             }
-            .tabItem { Label("Análises", systemImage: "chart.bar.xaxis") }
+            .tabItem { Label("Análises", systemImage: "chart.bar") }
             .tag(Aba.analises)
         }
-        .tint(Tema.primaria)
+        .tint(Tema.positivo)
+        .preferredColorScheme(.dark)
         .sheet(isPresented: $nav.perfilAberto) {
             NavigationStack { PerfilView(monitor: monitor, relatorio: relatorio) }
+                .tint(Tema.primaria)
         }
         .task {
             if TurnoStore.shared.atual != nil { Localizacao.shared.ligar() }   // reabriu com turno ativo
@@ -96,14 +98,17 @@ struct ContentView: View {
 }
 
 extension View {
-    func botaoPerfil(_ nav: Navegacao) -> some View {
-        toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { nav.perfilAberto = true } label: {
-                    Image(systemName: "person.crop.circle")
+    /// Perfil no canto superior direito e barra de abas translúcida.
+    func estiloAba(_ nav: Navegacao) -> some View {
+        toolbarBackground(.ultraThinMaterial, for: .tabBar)
+            .toolbarBackground(.visible, for: .tabBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { nav.perfilAberto = true } label: {
+                        Image(systemName: "person.crop.circle")
+                    }
+                    .accessibilityLabel("Perfil")
                 }
-                .accessibilityLabel("Perfil")
             }
-        }
     }
 }
