@@ -62,9 +62,15 @@ struct AtividadeView: View {
     private func seletorDia(_ dia: Date, dias: [Date], resumos: [ResumoTurno]) -> some View {
         let i = dias.firstIndex(of: dia) ?? 0
         let a = ResumoAgregado(resumos: resumos)
+        var partes: [String] = [Formato.reais(a.confirmado) + " confirmado", PainelTurno.corridas(a.corridasConfirmadas)]
+        if let km = a.km.valor { partes.append(Formato.km(km)) }
+        partes.append(Duracao.curta(a.duracao) + " de turno")
+        let total = partes.joined(separator: " · ")
+        let anterior = dias[min(dias.count - 1, i + 1)]
+        let proximo = dias[max(0, i - 1)]
         return VStack(alignment: .leading, spacing: Espaco.s) {
             HStack {
-                Button { diaEscolhido = dias[min(dias.count - 1, i + 1)] } label: {
+                Button { diaEscolhido = anterior } label: {
                     Image(systemName: "chevron.left").frame(width: 36, height: 36)
                 }
                 .disabled(i >= dias.count - 1)
@@ -74,15 +80,14 @@ struct AtividadeView: View {
                     .font(Tipo.titulo)
                     .foregroundStyle(Tema.texto)
                 Spacer()
-                Button { diaEscolhido = dias[max(0, i - 1)] } label: {
+                Button { diaEscolhido = proximo } label: {
                     Image(systemName: "chevron.right").frame(width: 36, height: 36)
                 }
                 .disabled(i == 0)
                 .accessibilityLabel("Próximo dia")
             }
             .foregroundStyle(Tema.primaria)
-            Text("\(Formato.reais(a.confirmado)) confirmado · " + PainelTurno.corridas(a.corridasConfirmadas)
-                 + (a.km.valor.map { " · " + Formato.km($0) } ?? "") + " · " + Duracao.curta(a.duracao) + " de turno")
+            Text(total)
                 .font(Tipo.apoio)
                 .monospacedDigit()
                 .foregroundStyle(Tema.textoSecundario)
