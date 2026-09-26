@@ -20,75 +20,86 @@ struct AtividadeView: View {
         } ?? []
 
         ScrollView {
-            VStack(alignment: .leading, spacing: Espaco.xxl) {
+            VStack(alignment: .leading, spacing: Espaco.l) {
                 if let dia {
-                    cabecalho(dia, dias: dias, resumos: resumos)
-                    let tempos = ResumoAgregado(resumos: resumos).tempoPorEstado
-                    if resumos.contains(where: { $0.temLeitura }) && !tempos.isEmpty {
-                        Secao("Tempo") { BarraEstados(tempos: tempos) }
-                    }
-                    let horas = Horas.porHora(resumos)
-                    if !horas.isEmpty {
-                        Secao("Por hora") {
-                            GraficoHoras(horas: horas) { h in
-                                if let t = h.turno {
-                                    nav.abrirMapa(turno: t, intervalo: DateInterval(start: h.inicio, duration: 3600))
-                                }
-                            }
-                        }
-                    }
-                    Secao("Linha do tempo", acao: {
+                    seletorDia(dia, dias: dias)
+                    totalDoDia(resumos)
+                    HStack {
+                        Spacer()
                         Button(mostrarOfertas ? "Ocultar ofertas" : "Mostrar ofertas") { mostrarOfertas.toggle() }
-                    }) {
-                        LinhaDoTempoVisual(itens: Narrativa.itens(resumos, eventos: linha.eventos, ofertas: mostrarOfertas))
+                            .font(Tipo.legenda.weight(.semibold))
+                            .foregroundStyle(Tema.primaria)
                     }
+                    LinhaDoTempoVisual(itens: Narrativa.itens(resumos, eventos: linha.eventos, ofertas: mostrarOfertas))
                 } else {
                     EstadoVazio(icone: "clock", titulo: "Nenhum turno registrado")
                 }
             }
             .padding(.horizontal, Espaco.margem)
-            .padding(.vertical, Espaco.l)
+            .padding(.vertical, Espaco.m)
         }
         .background(Tema.fundo.ignoresSafeArea())
         .navigationTitle("Atividade")
         .refreshable { linha.pedir() }
     }
 
-    private func cabecalho(_ dia: Date, dias: [Date], resumos: [ResumoTurno]) -> some View {
+    private func seletorDia(_ dia: Date, dias: [Date]) -> some View {
         let i = dias.firstIndex(of: dia) ?? 0
         let anterior = dias[min(dias.count - 1, i + 1)]
         let proximo = dias[max(0, i - 1)]
+        return HStack {
+            botaoDia("chevron.left", "Dia anterior", ativo: i < dias.count - 1) { diaEscolhido = anterior }
+            Spacer()
+            Text(Datas.extensa(dia))
+                .font(Tipo.apoio.weight(.semibold))
+                .foregroundStyle(Tema.texto)
+            Spacer()
+            botaoDia("chevron.right", "Próximo dia", ativo: i > 0) { diaEscolhido = proximo }
+        }
+        .padding(6)
+        .background(Tema.superficie, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Tema.linha, lineWidth: 1))
+    }
+
+    private func botaoDia(_ icone: String, _ rotulo: String, ativo: Bool, acao: @escaping () -> Void) -> some View {
+        Button(action: acao) {
+            Image(systemName: icone)
+                .font(.footnote.weight(.bold))
+                .frame(width: 30, height: 30)
+                .background(Tema.superficieAlta, in: Circle())
+                .foregroundStyle(ativo ? Tema.texto : Tema.textoTerciario)
+        }
+        .disabled(!ativo)
+        .accessibilityLabel(rotulo)
+    }
+
+    private func totalDoDia(_ resumos: [ResumoTurno]) -> some View {
         let a = ResumoAgregado(resumos: resumos)
         let comLeitura = resumos.contains { $0.temLeitura }
-        let subtitulo = comLeitura ? Datas.corridas(a.corridasConfirmadas) + " · " + Duracao.curta(a.duracao)
-                                   : Duracao.curta(a.duracao) + " sem leitura da tela"
-        return HStack {
-            Button { diaEscolhido = anterior } label: {
-                Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 40, height: 40)
-            }
-            .disabled(i >= dias.count - 1)
-            .accessibilityLabel("Dia anterior")
-            Spacer()
-            VStack(spacing: 2) {
-                Text(Datas.extensa(dia))
-                    .font(Tipo.apoio)
-                    .foregroundStyle(Tema.textoSecundario)
+        let horas = Horas.porHora(resumos)
+        return Cartao {
+            VStack(spacing: 4) {
+                Text("Total do dia").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
                 Text(comLeitura ? Formato.reais(a.confirmado) : "—")
                     .font(Tipo.destaque)
                     .monospacedDigit()
                     .foregroundStyle(Tema.texto)
-                Text(subtitulo)
+                Text(comLeitura ? "(" + Datas.corridas(a.corridasConfirmadas) + " · " + PainelTurno.duracaoLonga(a.duracao) + ")"
+                                : PainelTurno.duracaoLonga(a.duracao) + " sem leitura da tela")
                     .font(Tipo.legenda)
+                    .monospacedDigit()
                     .foregroundStyle(Tema.textoSecundario)
             }
-            Spacer()
-            Button { diaEscolhido = proximo } label: {
-                Image(systemName: "chevron.right").font(.body.weight(.semibold)).frame(width: 40, height: 40)
+            .frame(maxWidth: .infinity)
+            if !horas.isEmpty {
+                GraficoHoras(horas: horas) { h in
+                    if let t = h.turno {
+                        nav.abrirMapa(turno: t, intervalo: DateInterval(start: h.inicio, duration: 3600))
+                    }
+                }
+                .padding(.top, Espaco.m)
             }
-            .disabled(i == 0)
-            .accessibilityLabel("Próximo dia")
         }
-        .foregroundStyle(Tema.primaria)
     }
 }
 
@@ -251,35 +262,30 @@ struct LinhaDoTempoVisual: View {
         } else {
             corTitulo = forte ? Tema.texto : Tema.textoSecundario
         }
+        let detalhe = [Datas.hora(item.em), item.detalhe].compactMap { $0 }.joined(separator: " · ")
         return HStack(alignment: .top, spacing: Espaco.m) {
-            Text(Datas.hora(item.em))
-                .font(Tipo.legenda.monospacedDigit())
-                .foregroundStyle(Tema.textoTerciario)
-                .frame(width: 42, alignment: .leading)
-                .padding(.top, 2)
             VStack(spacing: 0) {
                 Circle()
                     .fill(item.cor)
-                    .frame(width: forte ? 10 : 7, height: forte ? 10 : 7)
-                    .padding(.top, forte ? 4 : 6)
+                    .frame(width: forte ? 11 : 8, height: forte ? 11 : 8)
+                    .overlay(Circle().stroke(Tema.fundo, lineWidth: 2))
+                    .padding(.top, forte ? 5 : 6)
                 if !ultima {
                     Rectangle().fill(Tema.linha).frame(width: 1.5).frame(maxHeight: .infinity)
                 }
             }
-            .frame(width: 12)
-            VStack(alignment: .leading, spacing: 2) {
+            .frame(width: 14)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(item.titulo)
                     .font(fonte)
                     .monospacedDigit()
                     .foregroundStyle(corTitulo)
-                if let d = item.detalhe {
-                    Text(d)
-                        .font(Tipo.legenda)
-                        .monospacedDigit()
-                        .foregroundStyle(Tema.textoSecundario)
-                }
+                Text(detalhe)
+                    .font(Tipo.legenda)
+                    .monospacedDigit()
+                    .foregroundStyle(Tema.textoSecundario)
             }
-            .padding(.bottom, Espaco.m)
+            .padding(.bottom, Espaco.l)
             Spacer(minLength: 0)
             if item.corrida != nil {
                 Image(systemName: "chevron.right")

@@ -136,70 +136,69 @@ struct PainelTurno: View {
         let estado = t.pausadoAgora ? EstadoMotorista.pausado : (r.segmentos.last?.estado ?? .semLeitura)
         let desde = r.segmentos.last?.inicio ?? t.inicio
         let comLeitura = r.temLeitura
-        let ultima = r.feitas.last
+        let oferta = r.ofertas.last
 
         return ScrollView {
-            VStack(alignment: .leading, spacing: Espaco.xl) {
-                VStack(spacing: Espaco.s) {
-                    Pilula(texto: (t.pausadoAgora ? "TURNO PAUSADO" : "TURNO ATIVO") + " • " + Duracao.curta(r.duracao.valor ?? 0),
-                           cor: t.pausadoAgora ? Tema.atencao : Tema.positivo,
-                           fundo: (t.pausadoAgora ? Tema.atencao : Tema.positivo).opacity(0.14))
-                    HStack(spacing: Espaco.m) {
-                        sinal("Leitura", ligado: monitor.ligada)
-                        sinal("GPS", ligado: gps.estado == .ativo)
-                    }
-                }
-                .frame(maxWidth: .infinity)
+            VStack(spacing: Espaco.xl) {
+                Pilula(texto: (t.pausadoAgora ? "TURNO PAUSADO" : "TURNO ATIVO") + " • " + Self.duracaoLonga(r.duracao.valor ?? 0),
+                       cor: t.pausadoAgora ? Tema.atencao : Tema.positivo,
+                       fundo: (t.pausadoAgora ? Tema.atencao : Tema.positivo).opacity(0.14))
 
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(comLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")
-                            .font(Tipo.heroi)
-                            .monospacedDigit()
-                            .foregroundStyle(Tema.texto)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.5)
-                        Spacer(minLength: Espaco.m)
-                        Text(comLeitura ? r.porHora.texto({ Formato.reais($0) + "/h" }) : "—")
-                            .font(Tipo.porHora)
-                            .monospacedDigit()
-                            .foregroundStyle(Tema.texto)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.6)
-                    }
-                    HStack {
-                        Text(comLeitura ? "faturamento confirmado" : "aguardando a leitura da tela")
-                        Spacer()
-                        Text("por hora")
-                    }
-                    .font(Tipo.apoio)
-                    .foregroundStyle(Tema.textoSecundario)
+                VStack(spacing: 6) {
+                    Text(comLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")
+                        .font(Tipo.heroi)
+                        .monospacedDigit()
+                        .foregroundStyle(Tema.texto)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                    Text(comLeitura ? "(" + Datas.corridas(r.corridasConfirmadas) + ")" : "aguardando a leitura da tela")
+                        .font(Tipo.apoio)
+                        .foregroundStyle(Tema.textoSecundario)
                     if metaDiaria > 0 {
-                        BarraMeta(valor: confirmadoHoje, meta: metaDiaria).padding(.top, 6)
+                        BarraMeta(valor: confirmadoHoje, meta: metaDiaria).padding(.top, 8)
                     }
                 }
 
-                VStack(spacing: 0) {
-                    Divisoria()
-                    GradeMetricas(colunas: 2) {
-                        Metrica(comLeitura ? r.porKm.texto({ Formato.reais($0) + " / km" }) : "—", "por km")
-                        Metrica(r.km, "rodados") { Formato.km($0) }
-                    }
-                    .padding(.vertical, Espaco.l)
-                    Divisoria()
-                    if comLeitura {
-                        Text(resumoCorridas(r))
-                            .font(Tipo.apoio)
-                            .monospacedDigit()
-                            .foregroundStyle(Tema.textoSecundario)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, Espaco.m)
-                    }
+                HStack(spacing: 0) {
+                    ritmo("Por hora", comLeitura ? r.porHora.texto({ Formato.reais($0) + "/h" }) : "—")
+                    Rectangle().fill(Tema.linha).frame(width: 1, height: 44)
+                    ritmo("Por km", comLeitura ? r.porKm.texto({ Formato.reais($0) + "/km" }) : "—")
                 }
+
+                HStack(spacing: Espaco.s) {
+                    Circle().fill(estado.cor).frame(width: 7, height: 7)
+                    Text(estado.nome + " · " + Duracao.curta(agora.timeIntervalSince(desde)))
+                    Text("·")
+                    Text(r.km.texto(Formato.km))
+                    sinal("Leitura", ligado: monitor.ligada)
+                    sinal("GPS", ligado: gps.estado == .ativo)
+                }
+                .font(Tipo.legenda.monospacedDigit())
+                .foregroundStyle(Tema.textoSecundario)
 
                 alertas
 
-                cartaoAgora(r, estado: estado, desde: desde, agora: agora, ultima: ultima)
+                if let o = oferta {
+                    VStack(alignment: .leading, spacing: Espaco.s) {
+                        Text("Última oferta").font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.textoSecundario)
+                        cartaoOferta(o)
+                    }
+                }
+
+                if let c = r.emAndamento ?? r.feitas.last {
+                    Cartao(espaco: 0) {
+                        NavigationLink { CorridaDetalheView(c: c, r: r) } label: {
+                            HStack(spacing: Espaco.s) {
+                                Text(c.feita ? "Última corrida" : (c.aBordoEm == nil ? "Em busca" : "Em corrida"))
+                                    .font(Tipo.legenda)
+                                    .foregroundStyle(Tema.textoTerciario)
+                                LinhaCorrida(c: c)
+                            }
+                            .padding(.horizontal, 14)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
 
                 NavigationLink { ResumoTurnoView(turno: t) } label: {
                     LinhaNavegacao("Resumo do turno", "chart.bar.doc.horizontal")
@@ -213,45 +212,54 @@ struct PainelTurno: View {
         .safeAreaInset(edge: .bottom) { acoes(t) }
     }
 
-    private func resumoCorridas(_ r: ResumoTurno) -> String {
-        var p = [Datas.corridas(r.corridasConfirmadas)]
-        if r.corridasEstimadas > 0 { p.append("\(r.corridasEstimadas) ≈") }
-        p.append(Duracao.curta(r.tempoPorEstado[.aguardando] ?? 0) + " sem corrida")
-        return p.joined(separator: " · ")
+    private func ritmo(_ rotulo: String, _ valor: String) -> some View {
+        VStack(spacing: 4) {
+            Text(rotulo).font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+            Text(valor)
+                .font(Tipo.metrica)
+                .monospacedDigit()
+                .foregroundStyle(Tema.texto)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .frame(maxWidth: .infinity)
     }
 
-    /// O que está acontecendo agora e a última corrida, num cartão discreto.
-    private func cartaoAgora(_ r: ResumoTurno, estado: EstadoMotorista, desde: Date, agora: Date,
-                             ultima: CorridaAnalisada?) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: Espaco.s) {
-                Circle().fill(estado.cor).frame(width: 8, height: 8)
-                Text(estado.nome).font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.texto)
-                Text(Duracao.curta(agora.timeIntervalSince(desde)))
-                    .font(Tipo.apoio.monospacedDigit())
-                    .foregroundStyle(Tema.textoSecundario)
-                Spacer()
-                if let c = r.emAndamento, let v = c.valorOfertaCent {
-                    Text(Formato.reais(Double(v) / 100))
-                        .font(Tipo.apoio.monospacedDigit())
+    /// Oferta: o que a 99 mostrou. Neutra, sem recomendação e sem somar em nada.
+    private func cartaoOferta(_ o: OfertaAnalisada) -> some View {
+        let minutos = (o.minBusca ?? 0) + (o.minViagem ?? 0)
+        var linha1 = [Formato.reais(Double(o.valorCent) / 100), Formato.km(o.km)]
+        if minutos > 0 { linha1.append("\(minutos) min") }
+        var linha2: [String] = []
+        if minutos > 0 { linha2.append(Formato.reais(Double(o.valorCent) / 100 / (Double(minutos) / 60)) + "/h") }
+        if let pk = o.porKm { linha2.append(Formato.reais(pk) + "/km") }
+        let situacao: String
+        switch o.resultado {
+        case .aceita:    situacao = "ACEITA"
+        case .naoAceita: situacao = "NÃO ACEITA"
+        case .emAberto:  situacao = "NA TELA"
+        }
+        return Cartao {
+            VStack(alignment: .leading, spacing: 8) {
+                Pilula(texto: situacao + " • " + Datas.hora(o.em), cor: Tema.textoSecundario, fundo: Tema.superficieAlta)
+                Text(linha1.joined(separator: " · "))
+                    .font(Tipo.titulo)
+                    .monospacedDigit()
+                    .foregroundStyle(Tema.texto)
+                if !linha2.isEmpty {
+                    Text(linha2.joined(separator: " · "))
+                        .font(Tipo.apoio)
+                        .monospacedDigit()
                         .foregroundStyle(Tema.textoSecundario)
                 }
             }
-            .padding(.vertical, 12)
-            if let c = ultima {
-                Divisoria()
-                NavigationLink { CorridaDetalheView(c: c, r: r) } label: {
-                    HStack(spacing: Espaco.s) {
-                        Text("Última").font(Tipo.legenda).foregroundStyle(Tema.textoTerciario)
-                        LinhaCorrida(c: c)
-                    }
-                }
-                .buttonStyle(.plain)
-            }
         }
-        .padding(.horizontal, Espaco.m)
-        .background(Tema.superficie, in: RoundedRectangle(cornerRadius: Raio.bloco))
-        .overlay(RoundedRectangle(cornerRadius: Raio.bloco).stroke(Tema.linha, lineWidth: 1))
+    }
+
+    /// "3h 12m"
+    static func duracaoLonga(_ s: TimeInterval) -> String {
+        let m = Int(s / 60)
+        return m < 60 ? "\(m)m" : "\(m / 60)h \(String(format: "%02d", m % 60))m"
     }
 
     @ViewBuilder

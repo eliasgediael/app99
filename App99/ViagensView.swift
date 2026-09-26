@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Aba Viagens. Corridas = só corridas feitas (confirmadas e estimadas). Ofertas = o que apareceu na tela.
+/// Corridas = só corridas feitas (confirmadas e estimadas). Ofertas = o que apareceu na tela.
 /// Cada turno conta no dia em que começou, igual a Análises.
 struct ViagensView: View {
     @ObservedObject var turnos = TurnoStore.shared
@@ -30,75 +30,72 @@ struct ViagensView: View {
         let dias = Dictionary(grouping: resumos) { Calendar.current.startOfDay(for: $0.turno.inicio) }
             .map { Dia(id: $0.key, resumos: $0.value) }
             .sorted { $0.id > $1.id }
-        let a = ResumoAgregado(resumos: resumos)
+        let nCorridas = dias.reduce(0) { $0 + $1.corridas.count }
+        let nOfertas = dias.reduce(0) { $0 + $1.ofertas.count }
 
-        let vazio = modo == .corridas ? dias.allSatisfy({ $0.corridas.isEmpty }) : a.ofertas == 0
-        List {
-            if vazio {
-                EstadoVazio(icone: modo == .corridas ? "car" : "tag",
-                            titulo: resumos.isEmpty ? "Nenhum turno \(Self.noPeriodo(periodo))"
-                                                    : (modo == .corridas ? "Nenhuma corrida" : "Nenhuma oferta"))
-                    .listRowBackground(Tema.fundo)
-                    .listRowSeparator(.hidden)
-            } else {
-                cabecalho(a)
-                    .listRowBackground(Tema.fundo)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: Espaco.m, leading: Espaco.margem, bottom: Espaco.l, trailing: Espaco.margem))
-                if modo == .corridas {
-                    corridas(dias)
-                } else {
-                    ofertas(dias)
-                }
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(Tema.fundo.ignoresSafeArea())
-        .safeAreaInset(edge: .top, spacing: 0) {
-            VStack(spacing: Espaco.m) {
-                Picker("", selection: $modo) {
-                    Text("Corridas").tag(Modo.corridas)
-                    Text("Ofertas").tag(Modo.ofertas)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, Espaco.margem)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Espaco.l) {
+                Segmentos(opcoes: [Modo.corridas, .ofertas],
+                          nome: { $0 == .corridas ? "Corridas (\(nCorridas))" : "Ofertas lidas (\(nOfertas))" },
+                          selecao: $modo)
                 FiltrosChips(opcoes: Self.periodos, nome: { $0.nome }, selecao: $periodo)
+                    .padding(.horizontal, -Espaco.margem)
+
+                if resumos.isEmpty {
+                    EstadoVazio(icone: "car", titulo: "Nenhum turno \(Self.noPeriodo(periodo))")
+                } else if modo == .corridas {
+                    if nCorridas == 0 {
+                        EstadoVazio(icone: "car", titulo: "Nenhuma corrida")
+                    }
+                    ForEach(dias) { dia in
+                        let lista = dia.corridas
+                        if !lista.isEmpty {
+                            cartaoDia(dia.id, total: Formato.reais(ResumoAgregado(resumos: dia.resumos).confirmado)) {
+                                ForEach(lista.indices, id: \.self) { i in
+                                    NavigationLink { CorridaDetalheView(c: lista[i].c, r: lista[i].r) } label: {
+                                        LinhaViagem(c: lista[i].c, ultima: i == lista.count - 1)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    if nOfertas == 0 {
+                        EstadoVazio(icone: "tag", titulo: "Nenhuma oferta")
+                    }
+                    ForEach(dias) { dia in
+                        let lista = dia.ofertas
+                        if !lista.isEmpty {
+                            cartaoDia(dia.id, total: "\(lista.count)") {
+                                ForEach(lista.indices, id: \.self) { i in
+                                    LinhaOferta(o: lista[i])
+                                    if i < lista.count - 1 { Divisoria() }
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            .padding(.vertical, Espaco.s)
-            .background(Tema.fundo)
+            .padding(.horizontal, Espaco.margem)
+            .padding(.vertical, Espaco.m)
         }
+        .background(Tema.fundo.ignoresSafeArea())
         .navigationTitle("Viagens")
     }
 
-    @ViewBuilder
-    private func cabecalho(_ a: ResumoAgregado) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if modo == .corridas {
-                Text(Formato.reais(a.confirmado))
-                    .font(Tipo.destaque)
+    private func cartaoDia<C: View>(_ dia: Date, total: String, @ViewBuilder conteudo: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: Espaco.s) {
+            HStack(alignment: .firstTextBaseline) {
+                RotuloSecao(Datas.curta(dia))
+                Spacer()
+                Text(total)
+                    .font(Tipo.legenda.weight(.semibold))
                     .monospacedDigit()
-                    .foregroundStyle(Tema.texto)
-                Text(resumoCorridas(a))
-                    .font(Tipo.apoio)
-                    .foregroundStyle(Tema.textoSecundario)
-            } else {
-                Text("\(a.ofertas)")
-                    .font(Tipo.destaque)
-                    .monospacedDigit()
-                    .foregroundStyle(Tema.textoSecundario)
-                Text("ofertas · \(a.ofertasAceitas) aceitas")
-                    .font(Tipo.apoio)
                     .foregroundStyle(Tema.textoSecundario)
             }
+            Cartao(espaco: 14) { conteudo() }
         }
-    }
-
-    private func resumoCorridas(_ a: ResumoAgregado) -> String {
-        var partes = [Datas.corridas(a.corridasConfirmadas)]
-        if a.corridasEstimadas > 0 { partes.append("\(a.corridasEstimadas) estimada\(a.corridasEstimadas == 1 ? "" : "s")") }
-        if let km = a.km.valor { partes.append(Formato.km(km)) }
-        return partes.joined(separator: " · ")
     }
 
     static func noPeriodo(_ p: Periodo) -> String {
@@ -111,53 +108,50 @@ struct ViagensView: View {
         case .mes:       return "neste mês"
         }
     }
+}
 
-    private func corridas(_ dias: [Dia]) -> some View {
-        ForEach(dias) { dia in
-            let lista = dia.corridas
-            if !lista.isEmpty {
-                Section {
-                    ForEach(lista.indices, id: \.self) { i in
-                        NavigationLink { CorridaDetalheView(c: lista[i].c, r: lista[i].r) } label: {
-                            LinhaCorrida(c: lista[i].c)
-                        }
-                        .listRowBackground(Tema.fundo)
-                        .listRowSeparatorTint(Tema.linha)
-                    }
-                } header: {
-                    cabecalhoDia(dia.id, Formato.reais(ResumoAgregado(resumos: dia.resumos).confirmado))
+/// Corrida numa linha do tempo: nó e horário à esquerda, valor e km/tempo à direita.
+struct LinhaViagem: View {
+    let c: CorridaAnalisada
+    let ultima: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Espaco.m) {
+            VStack(spacing: 0) {
+                Circle()
+                    .stroke(c.estimada ? Tema.atencao : Tema.textoTerciario, lineWidth: 1.5)
+                    .frame(width: 9, height: 9)
+                    .padding(.top, 5)
+                if !ultima {
+                    Rectangle().fill(Tema.linha).frame(width: 1).frame(maxHeight: .infinity)
+                }
+            }
+            .frame(width: 10)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(c.terminoVisto.map { $0.formatted(date: .omitted, time: .standard) } ?? "—")
+                    .font(Tipo.apoio.monospacedDigit())
+                    .foregroundStyle(Tema.textoSecundario)
+                if let d = c.duracao.valor {
+                    Label(Duracao.curta(d), systemImage: "clock")
+                        .font(Tipo.legenda.monospacedDigit())
+                        .foregroundStyle(Tema.textoTerciario)
+                }
+            }
+            Spacer(minLength: Espaco.s)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(c.valorTexto)
+                    .font(Tipo.valor)
+                    .monospacedDigit()
+                    .foregroundStyle(c.estimada ? Tema.atencao : Tema.texto)
+                if let km = c.kmGPS.valor {
+                    Text(Formato.km(km) + (c.porKm.valor.map { " · " + Formato.reais($0) + "/km" } ?? ""))
+                        .font(Tipo.legenda.monospacedDigit())
+                        .foregroundStyle(Tema.textoSecundario)
                 }
             }
         }
-    }
-
-    private func ofertas(_ dias: [Dia]) -> some View {
-        ForEach(dias) { dia in
-            let lista = dia.ofertas
-            if !lista.isEmpty {
-                Section {
-                    ForEach(lista.indices, id: \.self) { i in
-                        LinhaOferta(o: lista[i])
-                            .listRowBackground(Tema.fundo)
-                            .listRowSeparatorTint(Tema.linha)
-                    }
-                } header: {
-                    cabecalhoDia(dia.id, "\(lista.count)")
-                }
-            }
-        }
-    }
-
-    private func cabecalhoDia(_ dia: Date, _ total: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            RotuloSecao(Datas.curta(dia))
-            Spacer()
-            Text(total)
-                .font(Tipo.legenda.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(Tema.textoSecundario)
-        }
-        .padding(.vertical, Espaco.xs)
-        .background(Tema.fundo)
+        .padding(.bottom, ultima ? 0 : Espaco.l)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

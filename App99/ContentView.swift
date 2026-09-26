@@ -39,33 +39,33 @@ struct ContentView: View {
             NavigationStack {
                 PainelTurno(monitor: monitor)
                     .navigationTitle("Turno")
-                    .estiloAba(nav)
+                    .estiloAba(nav, "Turno")
             }
-            .tabItem { Label("Turno", systemImage: "speedometer") }
+            .tabItem { Label("Turno", systemImage: "gauge.medium") }
             .tag(Aba.turno)
 
             NavigationStack {
-                ViagensView().estiloAba(nav)
+                ViagensView().estiloAba(nav, "Viagens")
             }
-            .tabItem { Label("Viagens", systemImage: "list.bullet") }
+            .tabItem { Label("Viagens", systemImage: "car") }
             .tag(Aba.viagens)
 
             NavigationStack {
-                MapaAbaView().estiloAba(nav)
+                MapaAbaView().estiloAba(nav, "Mapa")
             }
             .tabItem { Label("Mapa", systemImage: "map") }
             .tag(Aba.mapa)
 
             NavigationStack {
-                AtividadeView().estiloAba(nav)
+                AtividadeView().estiloAba(nav, "Atividade")
             }
-            .tabItem { Label("Atividade", systemImage: "clock") }
+            .tabItem { Label("Atividade", systemImage: "chart.line.uptrend.xyaxis") }
             .tag(Aba.atividade)
 
             NavigationStack {
-                AnalisesView().estiloAba(nav)
+                AnalisesView().estiloAba(nav, "Análises")
             }
-            .tabItem { Label("Análises", systemImage: "chart.bar") }
+            .tabItem { Label("Análises", systemImage: "chart.bar.fill") }
             .tag(Aba.analises)
         }
         .tint(Tema.positivo)
@@ -98,11 +98,18 @@ struct ContentView: View {
 }
 
 extension View {
-    /// Perfil no canto superior direito e barra de abas translúcida.
-    func estiloAba(_ nav: Navegacao) -> some View {
-        toolbarBackground(.ultraThinMaterial, for: .tabBar)
+    /// Título centralizado em caixa alta, Perfil à direita e barra de abas translúcida.
+    func estiloAba(_ nav: Navegacao, _ titulo: String) -> some View {
+        navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    Text(titulo.uppercased())
+                        .font(.subheadline.weight(.bold))
+                        .tracking(1.2)
+                        .foregroundStyle(Tema.texto)
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { nav.perfilAberto = true } label: {
                         Image(systemName: "person.crop.circle")

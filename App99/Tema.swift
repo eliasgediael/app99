@@ -24,8 +24,8 @@ enum Tema {
     static let neutro           = Color(claro: 0x64748B, escuro: 0x64748B)
 
     static let mapaEmCorrida    = positivo
-    static let mapaIndoBuscar   = Color(claro: 0x1FAE7E, escuro: 0x34D399)
-    static let mapaSemCorrida   = neutro
+    static let mapaIndoBuscar   = Color(claro: 0xC98A12, escuro: 0xF4B63F)
+    static let mapaSemCorrida   = Color(claro: 0x2F6FDB, escuro: 0x3B82F6)
     static let abastecimento    = Color(claro: 0x7B5CC4, escuro: 0xA58BF0)
 }
 
@@ -294,8 +294,9 @@ struct ChipFiltro: View {
                 .font(Tipo.apoio.weight(.semibold))
                 .padding(.horizontal, 14)
                 .frame(minHeight: 34)
-                .background(ativo ? Tema.texto : Tema.superficieAlta, in: Capsule())
-                .foregroundStyle(ativo ? Tema.fundo : Tema.textoSecundario)
+                .background(ativo ? Tema.positivo.opacity(0.14) : Tema.superficie, in: Capsule())
+                .overlay(Capsule().stroke(ativo ? Tema.positivo : Tema.linha, lineWidth: 1))
+                .foregroundStyle(ativo ? Tema.positivo : Tema.textoSecundario)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(ativo ? .isSelected : [])
@@ -463,6 +464,54 @@ struct Pilula: View {
     }
 }
 
+/// Cartão: superfície escura com borda fina.
+struct Cartao<Conteudo: View>: View {
+    var espaco: CGFloat = 14
+    let conteudo: Conteudo
+
+    init(espaco: CGFloat = 14, @ViewBuilder conteudo: () -> Conteudo) {
+        self.espaco = espaco
+        self.conteudo = conteudo()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) { conteudo }
+            .padding(espaco)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Tema.superficie, in: RoundedRectangle(cornerRadius: Raio.bloco))
+            .overlay(RoundedRectangle(cornerRadius: Raio.bloco).stroke(Tema.linha, lineWidth: 1))
+    }
+}
+
+/// Seletor segmentado: fundo escuro, opção ativa em superfície clara.
+struct Segmentos<Valor: Hashable>: View {
+    let opcoes: [Valor]
+    let nome: (Valor) -> String
+    @Binding var selecao: Valor
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(opcoes, id: \.self) { o in
+                Button { selecao = o } label: {
+                    Text(nome(o))
+                        .font(Tipo.apoio.weight(.semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 32)
+                        .background(selecao == o ? Tema.superficieAlta : Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                        .foregroundStyle(selecao == o ? Tema.texto : Tema.textoSecundario)
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(selecao == o ? .isSelected : [])
+            }
+        }
+        .padding(4)
+        .background(Tema.superficie, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Tema.linha, lineWidth: 1))
+    }
+}
+
 // MARK: - Estados da operação
 
 extension EstadoMotorista {
@@ -470,7 +519,7 @@ extension EstadoMotorista {
         switch self {
         case .emCorrida:  return Tema.positivo
         case .aCaminho:   return Tema.mapaIndoBuscar
-        case .aguardando: return Tema.neutro
+        case .aguardando: return Tema.mapaSemCorrida
         case .pausado:    return Tema.atencao
         case .semLeitura: return Tema.textoTerciario
         }

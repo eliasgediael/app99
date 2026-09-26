@@ -83,7 +83,9 @@ struct MapaAbaView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: "calendar")
+                        Label(turno.map { Datas.curta($0.inicio) } ?? "", systemImage: "calendar")
+                            .labelStyle(.titleAndIcon)
+                            .font(Tipo.legenda.weight(.semibold))
                     }
                     .accessibilityLabel("Escolher turno")
                 }
@@ -117,9 +119,10 @@ struct MapaAbaView: View {
                                     Text(f.nome)
                                         .font(Tipo.legenda.weight(.semibold))
                                         .padding(.horizontal, 12)
-                                        .frame(minHeight: 32)
-                                        .background(filtro == f ? AnyShapeStyle(Tema.texto) : AnyShapeStyle(.regularMaterial), in: Capsule())
-                                        .foregroundStyle(filtro == f ? Tema.fundo : Tema.texto)
+                                        .frame(minHeight: 30)
+                                        .background(filtro == f ? AnyShapeStyle(Tema.positivo.opacity(0.18)) : AnyShapeStyle(.ultraThinMaterial), in: Capsule())
+                                        .overlay(Capsule().stroke(filtro == f ? Tema.positivo : Tema.linha, lineWidth: 1))
+                                        .foregroundStyle(filtro == f ? Tema.positivo : Tema.texto)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -146,14 +149,6 @@ struct MapaAbaView: View {
             }
             .overlay(alignment: .bottom) {
                 ZStack {
-                    Text(resumoMapa(r))
-                        .font(Tipo.apoio.weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(Tema.texto)
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 40)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().stroke(Tema.linha, lineWidth: 1))
                     HStack {
                         Spacer()
                         Button { enquadrar += 1 } label: {
@@ -188,13 +183,6 @@ struct MapaAbaView: View {
         .padding(.horizontal, 12)
         .frame(minHeight: 32)
         .background(.regularMaterial, in: Capsule())
-    }
-
-    private func resumoMapa(_ r: ResumoTurno) -> String {
-        var p: [String] = []
-        if let km = r.km.valor { p.append(Formato.km(km) + " rodados") }
-        if r.temLeitura { p.append(Datas.corridas(r.corridasConfirmadas)) }
-        return p.isEmpty ? "—" : p.joined(separator: " · ")
     }
 
     private func item(_ nome: String, _ cor: Color) -> some View {
@@ -416,7 +404,7 @@ struct MapaTurnoView: UIViewRepresentable {
             case .embarque:
                 v.image = Self.ponto(UIColor(Tema.positivo), 10)
             case .desembarque:
-                let img = Self.pilula(m.title ?? "", UIColor(Tema.mapaIndoBuscar))
+                let img = Self.pilula(m.title ?? "", UIColor(Tema.texto))
                 v.image = img
                 v.centerOffset = CGPoint(x: 0, y: -img.size.height / 2 - 2)
             case .oferta:

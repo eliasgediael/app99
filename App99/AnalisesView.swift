@@ -14,22 +14,28 @@ struct AnalisesView: View {
         let antes = ResumoAgregado(resumos: Historico.turnos(registrados, entre: periodo.anterior()).map { turnos.resumo($0) })
 
         ScrollView {
-            VStack(alignment: .leading, spacing: Espaco.xxl) {
-                FiltrosChips(opcoes: Periodo.allCases, nome: { $0.nome }, selecao: $periodo)
-                    .padding(.horizontal, -Espaco.margem)
+            VStack(alignment: .leading, spacing: Espaco.l) {
+                Segmentos(opcoes: [Periodo.hoje, .ontem, .ultimos7, .ultimos30], nome: { $0.nome }, selecao: $periodo)
 
                 if lista.isEmpty {
                     EstadoVazio(icone: "chart.bar", titulo: "Sem dados neste período")
                 } else {
                     topo(a, antes: antes)
                     if !a.tempoPorEstado.isEmpty {
-                        Secao("Tempo") { BarraEstados(tempos: a.tempoPorEstado) }
+                        Cartao {
+                            Text("Eficiência do tempo").font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.texto)
+                                .padding(.bottom, Espaco.m)
+                            BarraEficiencia(tempos: a.tempoPorEstado)
+                        }
                     }
                     let horas = a.horasDoDia
                     if !horas.isEmpty {
-                        Secao("Faturamento por hora") { GraficoHoras(horas: horas) }
+                        Cartao {
+                            Text("Faturamento por hora").font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.texto)
+                            GraficoHoras(horas: horas)
+                        }
                     }
-                    indicadores(a)
+                    indicadores(a).padding(.vertical, Espaco.s)
                     porDia(a)
                     regioes(a)
                     rotas(a)
@@ -47,25 +53,48 @@ struct AnalisesView: View {
     // MARK: Topo
 
     private func topo(_ a: ResumoAgregado, antes: ResumoAgregado) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(Formato.reais(a.confirmado))
-                .font(Tipo.heroi)
-                .monospacedDigit()
-                .foregroundStyle(Tema.texto)
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-            Text("Faturamento total (\(periodo.nome.lowercased()))")
-                .font(Tipo.apoio)
-                .foregroundStyle(Tema.textoSecundario)
-            // Só compara quando o período anterior tem turnos e faturamento
-            if antes.turnos > 0, antes.confirmado > 0 {
-                let d = (a.confirmado - antes.confirmado) / antes.confirmado
-                HStack(spacing: 4) {
-                    Image(systemName: d >= 0 ? "arrow.up.right" : "arrow.down.right")
-                    Text(String(format: "%+.0f%% vs período anterior", d * 100).replacingOccurrences(of: ".", with: ","))
+        Cartao(espaco: 16) {
+            VStack(spacing: 6) {
+                Text("Faturamento bruto").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+                Text(Formato.reais(a.confirmado))
+                    .font(Tipo.destaque)
+                    .monospacedDigit()
+                    .foregroundStyle(Tema.texto)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                // Só compara quando o período anterior tem turnos e faturamento
+                if antes.turnos > 0, antes.confirmado > 0 {
+                    let d = (a.confirmado - antes.confirmado) / antes.confirmado
+                    HStack(spacing: 4) {
+                        Image(systemName: d >= 0 ? "arrow.up.right" : "arrow.down.right")
+                        Text(String(format: "%+.0f%% vs período anterior", d * 100).replacingOccurrences(of: ".", with: ","))
+                    }
+                    .font(Tipo.legenda.weight(.semibold))
+                    .foregroundStyle(Tema.textoSecundario)
                 }
-                .font(Tipo.legenda.weight(.semibold))
-                .foregroundStyle(Tema.textoSecundario)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, a.custosRegistrados > 0 ? Espaco.m : 0)
+            if a.custosRegistrados > 0 {
+                Divisoria()
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Custos").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("− " + Formato.reais(a.custosRegistrados)).font(Tipo.valor).monospacedDigit().foregroundStyle(Tema.texto)
+                        Text(a.combustivel == a.custosRegistrados ? "Combustível" : "Combustível e outros")
+                            .font(Tipo.legenda).foregroundStyle(Tema.textoTerciario)
+                    }
+                }
+                .padding(.vertical, Espaco.m)
+                Divisoria()
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Resultado líquido").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+                    Spacer()
+                    Text("= " + Formato.reais(a.confirmado - a.custosRegistrados))
+                        .font(Tipo.valor).monospacedDigit().foregroundStyle(Tema.texto)
+                }
+                .padding(.top, Espaco.m)
             }
         }
     }
@@ -311,5 +340,71 @@ struct SemanaLista: View {
                 .frame(minHeight: 18)
             }
         }
+    }
+}
+
+/// Tempo do período numa barra: em corrida, em busca, sem corrida (e o resto em cinza), com escala em horas.
+struct BarraEficiencia: View {
+    let tempos: [EstadoMotorista: TimeInterval]
+
+    private struct Fatia: Identifiable {
+        let id: String
+        let nome: String
+        let cor: Color
+        let segundos: TimeInterval
+    }
+
+    private var fatias: [Fatia] {
+        let outros = (tempos[.pausado] ?? 0) + (tempos[.semLeitura] ?? 0)
+        return [
+            Fatia(id: "c", nome: EstadoMotorista.emCorrida.nome, cor: EstadoMotorista.emCorrida.cor, segundos: tempos[.emCorrida] ?? 0),
+            Fatia(id: "b", nome: EstadoMotorista.aCaminho.nome, cor: EstadoMotorista.aCaminho.cor, segundos: tempos[.aCaminho] ?? 0),
+            Fatia(id: "a", nome: "Sem corrida", cor: EstadoMotorista.aguardando.cor, segundos: tempos[.aguardando] ?? 0),
+            Fatia(id: "o", nome: "Pausa ou sem leitura", cor: Tema.superficieAlta, segundos: outros),
+        ].filter { $0.segundos >= 30 }
+    }
+
+    var body: some View {
+        let lista = fatias
+        let total = max(1, lista.reduce(0) { $0 + $1.segundos })
+        VStack(alignment: .leading, spacing: Espaco.s) {
+            GeometryReader { g in
+                HStack(spacing: 2) {
+                    ForEach(lista) { f in
+                        Rectangle().fill(f.cor)
+                            .frame(width: max(3, (g.size.width - CGFloat(lista.count - 1) * 2) * f.segundos / total))
+                    }
+                }
+            }
+            .frame(height: 22)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            HStack {
+                ForEach(0..<5) { i in
+                    Text(Self.horas(total * Double(i) / 4))
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(Tema.textoTerciario)
+                    if i < 4 { Spacer() }
+                }
+            }
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: 6) {
+                ForEach(lista) { f in
+                    HStack(spacing: 5) {
+                        Circle().fill(f.cor).frame(width: 7, height: 7)
+                        Text(f.nome).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario).lineLimit(1)
+                    }
+                }
+            }
+            .padding(.top, 4)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private static func horas(_ s: TimeInterval) -> String {
+        let h = s / 3600
+        if h < 10 && h != h.rounded() {
+            return String(format: "%.1fh", h).replacingOccurrences(of: ".", with: ",")
+        }
+        return "\(Int(h.rounded()))h"
     }
 }
