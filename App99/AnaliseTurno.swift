@@ -428,8 +428,9 @@ enum Agrupamento {
 
 enum Historico {
     static func turnos(_ turnos: [Turno], em periodo: Periodo, agora: Date = Date()) -> [Turno] {
+        // Cada turno conta no dia em que começou (turno da noite que passa da meia-noite é "de ontem")
         let i = periodo.intervalo(agora: agora)
-        return turnos.filter { $0.inicio < i.end && ($0.fim ?? agora) > i.start }
+        return turnos.filter { $0.inicio >= i.start && $0.inicio < i.end }
     }
 
     static func ultimos(_ n: Int, de turnos: [Turno]) -> [Turno] {
