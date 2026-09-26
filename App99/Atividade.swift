@@ -1,7 +1,6 @@
 import SwiftUI
 
-// Leituras derivadas pra Atividade e Análises. Tudo sai de ResumoTurno (que sai da linha do tempo,
-// do GPS e dos custos). Nada aqui é guardado: é só outra forma de olhar os mesmos dados.
+// Derivado de ResumoTurno. Nada aqui é guardado.
 
 // MARK: - Por hora
 
@@ -24,10 +23,8 @@ struct HoraAtividade: Identifiable {
     /// R$/h só com pelo menos 15 min de turno na hora (menos que isso distorce).
     var porHora: Double? { tempoTurno >= 900 ? confirmado / (tempoTurno / 3600) : nil }
 
-    /// "21–22"
     var rotulo: String {
-        let h = Calendar.current.component(.hour, from: inicio)
-        return String(format: "%02d–%02d", h, (h + 1) % 24)
+        String(format: "%02dh", Calendar.current.component(.hour, from: inicio))
     }
 }
 
@@ -104,151 +101,64 @@ enum Horas {
     }
 }
 
-// MARK: - Narrativa
+// MARK: - Linha do tempo
 
-enum FiltroAtividade: String, CaseIterable, Identifiable {
-    case tudo, corridas, ofertas, turno
-    var id: Self { self }
-    var nome: String {
-        switch self {
-        case .tudo:     return "Tudo"
-        case .corridas: return "Corridas"
-        case .ofertas:  return "Ofertas"
-        case .turno:    return "Turno"
-        }
-    }
-}
-
-/// Um acontecimento contado em linguagem de motorista.
 struct ItemAtividade: Identifiable {
+    enum Tipo { case turno, corrida, espera, pausa, abastecimento, leitura, oferta }
     let id: String
     let em: Date
-    let categoria: FiltroAtividade
+    let tipo: Tipo
     let titulo: String
     var detalhe: String?
-    let icone: String
-    let cor: Color
+    var cor: Color
     var corrida: CorridaAnalisada?
     var resumo: ResumoTurno?
-    /// Oferta, espera etc. aparecem mais discretos que a corrida.
-    var discreto = false
 }
 
 enum Narrativa {
-    /// Turnos do dia → história em ordem. `eventos`: linha do tempo (pra GPS e leitura liga/desliga).
-    static func itens(_ resumos: [ResumoTurno], eventos: [EventoLinha]) -> [ItemAtividade] {
+    static func itens(_ resumos: [ResumoTurno], eventos: [EventoLinha], ofertas: Bool) -> [ItemAtividade] {
         var lista: [ItemAtividade] = []
         for r in resumos {
             let t = r.turno
-            let pref = t.id.uuidString
-            lista.append(ItemAtividade(id: pref + "-ini", em: t.inicio, categoria: .turno, titulo: "Turno iniciado",
-                                       icone: "flag", cor: Tema.primaria))
-            for (i, p) in t.pausas.enumerated() {
-                lista.append(ItemAtividade(id: pref + "-p\(i)", em: p.inicio, categoria: .turno, titulo: "Pausa",
-                                           detalhe: Duracao.curta(p.duracao(ate: t.fim ?? Date())),
-                                           icone: "pause.circle", cor: Tema.atencao))
-                if let f = p.fim {
-                    lista.append(ItemAtividade(id: pref + "-pf\(i)", em: f, categoria: .turno, titulo: "Fim da pausa",
-                                               icone: "play.circle", cor: Tema.atencao, discreto: true))
-                }
-            }
+            let p = t.id.uuidString
+            lista.append(ItemAtividade(id: p + "i", em: t.inicio, tipo: .turno, titulo: "Turno iniciado", cor: Tema.primaria))
             if let fim = t.fim {
-                lista.append(ItemAtividade(id: pref + "-fim", em: fim, categoria: .turno, titulo: "Turno encerrado",
-                                           detalhe: "\(Duracao.curta(r.duracao.valor ?? 0)) · \(Formato.reais(r.faturamentoConfirmado.valor ?? 0)) confirmado",
-                                           icone: "flag.checkered", cor: Tema.primaria))
+                lista.append(ItemAtividade(id: p + "f", em: fim, tipo: .turno, titulo: "Turno encerrado",
+                                           detalhe: Duracao.curta(r.duracao.valor ?? 0), cor: Tema.primaria))
             }
-
-            for c in r.corridas {
-                let cid = pref + "-c\(c.id)"
-                if let a = c.aceiteEm {
-                    let oferta = c.valorOfertaCent.map { "oferta de " + Formato.reais(Double($0) / 100) }
-                    let busca = c.buscaM.map { "busca " + Formato.km(Double($0) / 1000) }
-                    lista.append(ItemAtividade(id: cid + "-a", em: a, categoria: .corridas,
-                                               titulo: c.cancelada ? "Corrida aceita" : "Corrida aceita · indo buscar",
-                                               detalhe: [oferta, busca].compactMap { $0 }.joined(separator: " · "),
-                                               icone: "car", cor: Tema.mapaIndoBuscar, corrida: c, resumo: r))
-                }
-                if let b = c.aBordoEm {
-                    lista.append(ItemAtividade(id: cid + "-b", em: b, categoria: .corridas, titulo: "Passageiro a bordo",
-                                               icone: "person.fill", cor: Tema.mapaEmCorrida, corrida: c, resumo: r))
-                }
-                if let f = c.terminoVisto, c.confianca != nil || c.cancelada {
-                    lista.append(fim(c, em: f, id: cid + "-f", r: r))
-                }
+            for (i, pausa) in t.pausas.enumerated() {
+                lista.append(ItemAtividade(id: p + "p\(i)", em: pausa.inicio, tipo: .pausa, titulo: "Pausa",
+                                           detalhe: Duracao.curta(pausa.duracao(ate: t.fim ?? Date())), cor: Tema.atencao))
             }
-
-            for o in r.ofertas {
-                let resultado: String
-                switch o.resultado {
-                case .aceita:    resultado = "aceita"
-                case .naoAceita: resultado = "não aceita"
-                case .emAberto:  resultado = "na tela"
-                }
-                lista.append(ItemAtividade(id: pref + "-o\(o.id)-\(Int(o.em.timeIntervalSince1970))", em: o.em, categoria: .ofertas,
-                                           titulo: "Oferta recebida",
-                                           detalhe: ([Formato.reais(Double(o.valorCent) / 100), Formato.km(o.km),
-                                                      o.porKm.map { Formato.reais($0) + "/km" }, resultado] as [String?])
-                                               .compactMap { $0 }.joined(separator: " · "),
-                                           icone: "tag", cor: Tema.neutro, discreto: true))
+            for c in r.feitas {
+                guard let fim = c.terminoVisto else { continue }
+                lista.append(ItemAtividade(id: p + "c\(c.id)", em: fim, tipo: .corrida, titulo: c.valorTexto,
+                                           detalhe: c.resumoCurto.isEmpty ? nil : c.resumoCurto,
+                                           cor: c.estimada ? Tema.atencao : Tema.positivo, corrida: c, resumo: r))
             }
-
-            for (i, s) in r.segmentos.enumerated() where s.estado == .aguardando && s.duracao >= 180 {
-                lista.append(ItemAtividade(id: pref + "-e\(i)", em: s.inicio, categoria: .turno,
-                                           titulo: "Sem corrida · \(Duracao.curta(s.duracao))",
-                                           icone: "hourglass", cor: Tema.neutro, discreto: true))
+            for (i, s) in r.segmentos.enumerated() where s.estado == .aguardando && s.duracao >= 300 {
+                lista.append(ItemAtividade(id: p + "e\(i)", em: s.inicio, tipo: .espera,
+                                           titulo: "\(Duracao.curta(s.duracao)) sem corrida", cor: Tema.neutro))
             }
-
             for c in r.custos {
-                lista.append(ItemAtividade(id: c.id.uuidString, em: c.em, categoria: .turno, titulo: c.tipo.nome,
-                                           detalhe: [Formato.reais(c.valor), c.litros.map { String(format: "%.2f L", $0).replacingOccurrences(of: ".", with: ",") }]
-                                               .compactMap { $0 }.joined(separator: " · "),
-                                           icone: c.tipo == .combustivel ? "fuelpump" : "creditcard", cor: .purple))
+                lista.append(ItemAtividade(id: c.id.uuidString, em: c.em, tipo: .abastecimento, titulo: c.tipo.nome,
+                                           detalhe: Formato.reais(c.valor), cor: Tema.abastecimento))
             }
-
-            for e in eventos where t.contem(e.data) {
-                switch e.tipo {
-                case .gpsSemSinal:
-                    lista.append(ItemAtividade(id: "g\(e.seq)", em: e.data, categoria: .turno, titulo: "GPS sem sinal",
-                                               detalhe: "os km desse trecho não entram na conta",
-                                               icone: "location.slash", cor: Tema.atencao, discreto: true))
-                case .gpsRetomado:
-                    lista.append(ItemAtividade(id: "g\(e.seq)", em: e.data, categoria: .turno, titulo: "GPS voltou",
-                                               icone: "location", cor: Tema.neutro, discreto: true))
-                case .leituraIniciada:
-                    lista.append(ItemAtividade(id: "l\(e.seq)", em: e.data, categoria: .turno, titulo: "Leitura da tela ligada",
-                                               icone: "record.circle", cor: Tema.neutro, discreto: true))
-                case .leituraEncerrada:
-                    lista.append(ItemAtividade(id: "l\(e.seq)", em: e.data, categoria: .turno, titulo: "Leitura da tela desligada",
-                                               detalhe: "o que aconteceu depois disso não foi registrado",
-                                               icone: "stop.circle", cor: Tema.atencao, discreto: true))
-                default: break
+            // Leitura desligada no meio do turno = período sem registro
+            for e in eventos where t.contem(e.data) && e.tipo == .leituraEncerrada {
+                guard (t.fim ?? .distantFuture).timeIntervalSince(e.data) > 60 else { continue }
+                lista.append(ItemAtividade(id: "l\(e.seq)", em: e.data, tipo: .leitura, titulo: "Leitura desligada",
+                                           cor: Tema.textoTerciario))
+            }
+            if ofertas {
+                for o in r.ofertas {
+                    lista.append(ItemAtividade(id: p + "o\(o.id)-\(Int(o.em.timeIntervalSince1970))", em: o.em, tipo: .oferta,
+                                               titulo: "Oferta " + Formato.reais(Double(o.valorCent) / 100),
+                                               detalhe: Formato.km(o.km) + (o.resultado == .aceita ? " · aceita" : ""),
+                                               cor: Tema.textoTerciario))
                 }
             }
         }
         return lista.sorted { $0.em < $1.em }
-    }
-
-    private static func fim(_ c: CorridaAnalisada, em: Date, id: String, r: ResumoTurno) -> ItemAtividade {
-        let km = c.kmGPS.valor.map(Formato.km)
-        let dur = c.duracao.valor.map(Duracao.curta)
-        if c.cancelada {
-            return ItemAtividade(id: id, em: em, categoria: .corridas, titulo: "Corrida cancelada",
-                                 detalhe: "não entra em nenhum total", icone: "xmark.circle",
-                                 cor: Tema.textoTerciario, corrida: c, resumo: r)
-        }
-        switch c.confianca {
-        case .confirmado?:
-            return ItemAtividade(id: id, em: em, categoria: .corridas, titulo: "Corrida finalizada",
-                                 detalhe: [c.valorTexto, km, dur].compactMap { $0 }.joined(separator: " · "),
-                                 icone: "checkmark.circle.fill", cor: Tema.positivo, corrida: c, resumo: r)
-        case .estimado?:
-            return ItemAtividade(id: id, em: em, categoria: .corridas, titulo: "Corrida finalizada · estimada",
-                                 detalhe: [c.valorTexto, "fora do total", km].compactMap { $0 }.joined(separator: " · "),
-                                 icone: "questionmark.circle.fill", cor: Tema.atencao, corrida: c, resumo: r)
-        default:
-            return ItemAtividade(id: id, em: em, categoria: .corridas, titulo: "Corrida sem confirmação",
-                                 detalhe: "sem valor identificado · toque pra ver o motivo",
-                                 icone: "circle.dashed", cor: Tema.neutro, corrida: c, resumo: r)
-        }
     }
 }

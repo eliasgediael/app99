@@ -39,6 +39,19 @@ final class LinhaDoTempoStore: ObservableObject {
         guardar(e)
     }
 
+    /// Troca a linha do tempo inteira (reprocessamento), guardando antes uma cópia do arquivo atual.
+    func substituirTudo(_ novos: [EventoLinha], copiaDeSeguranca nome: String) {
+        if let url = arquivo {
+            let copia = url.deletingLastPathComponent().appendingPathComponent(nome)
+            if !FileManager.default.fileExists(atPath: copia.path) {
+                try? FileManager.default.copyItem(at: url, to: copia)
+            }
+        }
+        eventos = novos.sorted { $0.seq < $1.seq }
+        seqs = Set(eventos.map(\.seq))
+        salvar()
+    }
+
     /// Maior seq tal que não falta nenhum antes dele (a partir do primeiro que temos).
     private var contiguo: Int {
         guard var n = eventos.first(where: { !$0.doApp })?.seq else { return 0 }

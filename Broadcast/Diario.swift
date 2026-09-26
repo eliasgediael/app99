@@ -4,7 +4,7 @@ import Foundation
 /// atualizações e renovações do AltStore). O app recebe cópias pelo CanalDarwin.
 /// Usar sempre na mesma fila (a filaOCR do SampleHandler) — inclusive os envios, pra não
 /// misturar pacotes no mesmo canal.
-final class Diario {
+final class Diario: RegistroMotor {
     private let chaveDias = "diario"
     private let chaveSeq = "linhaSeq"
     private let chaveIdCorrida = "corridaId"
@@ -103,6 +103,8 @@ final class Diario {
         guard let url = arquivoEventos, let dados = try? JSONEncoder().encode(eventos) else { return }
         try? dados.write(to: url, options: .atomic)
     }
+
+    func sinal(_ s: SinalExtensao) { s.enviar() }
 
     // MARK: Tempo com a leitura ligada
 

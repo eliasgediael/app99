@@ -1,45 +1,35 @@
 import SwiftUI
 import UIKit
 
-// MARK: - Apex · Design system
-//
-// Tokens (cor, tipo, espaço, forma) e componentes base. Toda tela nova usa daqui.
-// Regras da identidade:
-// - Menta só pra coisa boa e real: faturamento CONFIRMADO, operação funcionando, meta atingida.
-// - Oferta nunca em menta (oferta não é dinheiro).
-// - Estimado = âmbar discreto ("≈"); indeterminado = neutro ("—").
-// - Hierarquia por tipografia, contraste e espaço — não por caixas e bordas.
+// Apex: tokens e peças de interface.
+// Menta só para dinheiro confirmado e operação ok. Oferta nunca em menta.
+// Hierarquia por tipografia e espaço, não por caixas.
 
-// MARK: Cores
+// MARK: - Cores
 
 enum Tema {
-    // Superfícies
-    static let fundo            = Color(claro: 0xF4F6F8, escuro: 0x0B0F14)
-    static let superficie       = Color(claro: 0xFFFFFF, escuro: 0x131A22)
-    static let superficieAlta   = Color(claro: 0xEEF2F5, escuro: 0x1B2430)
-    static let linha            = Color(claro: 0xDCE2E8, escuro: 0x253141)
+    static let fundo            = Color(claro: 0xF5F7F9, escuro: 0x0A0E13)
+    static let superficie       = Color(claro: 0xFFFFFF, escuro: 0x121920)
+    static let superficieAlta   = Color(claro: 0xE8ECF0, escuro: 0x1C2530)
+    static let linha            = Color(claro: 0xDDE3E8, escuro: 0x222C38)
 
-    // Texto
-    static let texto            = Color(claro: 0x0E151C, escuro: 0xE9EEF3)
-    static let textoSecundario  = Color(claro: 0x5A6776, escuro: 0x98A6B6)
-    static let textoTerciario   = Color(claro: 0x8793A1, escuro: 0x66737F)
+    static let texto            = Color(claro: 0x0E151C, escuro: 0xECF1F5)
+    static let textoSecundario  = Color(claro: 0x5A6776, escuro: 0x9AA7B5)
+    static let textoTerciario   = Color(claro: 0x8C97A4, escuro: 0x5F6B78)
 
-    // Marca
-    static let primaria         = Color(claro: 0x15627C, escuro: 0x1F7A99)   // azul-petróleo
-    static let positivo         = Color(claro: 0x12A06A, escuro: 0x3DDC97)   // menta
-    // Estados
+    static let primaria         = Color(claro: 0x15627C, escuro: 0x2B8FB3)
+    static let positivo         = Color(claro: 0x12A06A, escuro: 0x3DDC97)
     static let atencao          = Color(claro: 0xB7801B, escuro: 0xF2B84B)
     static let erro             = Color(claro: 0xC43C3C, escuro: 0xEF5B5B)
     static let neutro           = Color(claro: 0x7D8A9A, escuro: 0x7D8A9A)
 
-    // Mapa (trajeto por estado)
     static let mapaEmCorrida    = positivo
     static let mapaIndoBuscar   = Color(claro: 0x2A86B0, escuro: 0x4BA8D4)
     static let mapaSemCorrida   = neutro
+    static let abastecimento    = Color(claro: 0x7B5CC4, escuro: 0xA58BF0)
 }
 
 extension Color {
-    /// Cor que muda sozinha entre modo claro e escuro.
     init(claro: UInt32, escuro: UInt32) {
         self.init(uiColor: UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: escuro) : UIColor(hex: claro) })
     }
@@ -53,44 +43,37 @@ extension UIColor {
     }
 }
 
-// MARK: Tipografia (fonte do sistema: respeita o tamanho de texto do iPhone)
+// MARK: - Tipografia, espaço, forma
 
 enum Tipo {
-    /// O número que manda na tela (faturamento do turno).
-    static let destaque = Font.system(size: 44, weight: .bold, design: .rounded)
-    /// Números secundários grandes (R$/h, km).
-    static let metrica  = Font.system(.title2, design: .rounded).weight(.semibold)
+    static let heroi    = Font.system(size: 58, weight: .bold, design: .rounded)
+    static let destaque = Font.system(size: 40, weight: .bold, design: .rounded)
+    static let metrica  = Font.system(size: 22, weight: .semibold, design: .rounded)
+    static let valor    = Font.system(.body, design: .rounded).weight(.semibold)
     static let titulo   = Font.title3.weight(.semibold)
     static let corpo    = Font.body
     static let apoio    = Font.subheadline
     static let legenda  = Font.caption
-    /// Rótulo em caixa alta com espaçamento ("FATURAMENTO CONFIRMADO").
-    static let rotulo   = Font.caption.weight(.semibold)
+    static let rotulo   = Font.caption2.weight(.semibold)
 }
-
-// MARK: Espaço e forma
 
 enum Espaco {
     static let xs: CGFloat = 4
     static let s: CGFloat = 8
     static let m: CGFloat = 12
     static let l: CGFloat = 20
-    static let xl: CGFloat = 32
-    /// Margem lateral das telas.
+    static let xl: CGFloat = 28
+    static let xxl: CGFloat = 40
     static let margem: CGFloat = 20
-    /// Espaço interno dos blocos.
-    static let bloco: CGFloat = 16
 }
 
 enum Raio {
-    static let bloco: CGFloat = 14
-    static let botao: CGFloat = 12
-    static let chip: CGFloat = 999
+    static let bloco: CGFloat = 16
+    static let botao: CGFloat = 14
 }
 
-// MARK: - Componentes
+// MARK: - Texto
 
-/// Rótulo em caixa alta, discreto.
 struct RotuloSecao: View {
     let texto: String
     init(_ texto: String) { self.texto = texto }
@@ -98,149 +81,201 @@ struct RotuloSecao: View {
     var body: some View {
         Text(texto.uppercased())
             .font(Tipo.rotulo)
-            .tracking(0.8)
-            .foregroundStyle(Tema.textoSecundario)
+            .tracking(1)
+            .foregroundStyle(Tema.textoTerciario)
     }
 }
 
-/// Cabeçalho de seção: título + ação opcional à direita.
-struct CabecalhoSecao<Acao: View>: View {
+/// Seção sem caixa: rótulo pequeno, ação opcional à direita e o conteúdo.
+struct Secao<Conteudo: View, Acao: View>: View {
     let titulo: String
     let acao: Acao
+    let conteudo: Conteudo
 
-    init(_ titulo: String, @ViewBuilder acao: () -> Acao) {
+    init(_ titulo: String, @ViewBuilder acao: () -> Acao, @ViewBuilder conteudo: () -> Conteudo) {
         self.titulo = titulo
         self.acao = acao()
+        self.conteudo = conteudo()
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            RotuloSecao(titulo)
-            Spacer()
-            acao
-                .font(Tipo.apoio)
-                .foregroundStyle(Tema.primaria)
-        }
-    }
-}
-
-extension CabecalhoSecao where Acao == EmptyView {
-    init(_ titulo: String) { self.init(titulo) { EmptyView() } }
-}
-
-/// Métrica em linha: rótulo à esquerda, valor à direita (com confiança, se houver).
-struct LinhaMetrica: View {
-    let titulo: String
-    let valor: Text
-
-    init(_ titulo: String, _ valor: String) {
-        self.titulo = titulo
-        self.valor = Text(valor)
-    }
-
-    init(_ titulo: String, texto: Text) {
-        self.titulo = titulo
-        self.valor = texto
-    }
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(titulo)
-                .font(Tipo.apoio)
-                .foregroundStyle(Tema.textoSecundario)
-            Spacer(minLength: Espaco.m)
-            valor
-                .font(Tipo.corpo.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(Tema.texto)
-        }
-        .padding(.vertical, Espaco.s)
-    }
-}
-
-/// Métrica em coluna: número médio + rótulo. Pra grades de 2–3 métricas secundárias.
-struct MetricaCompacta: View {
-    let valor: String
-    let rotulo: String
-    var confianca: Confianca = .confirmado
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(valorTexto)
-                .font(Tipo.metrica)
-                .monospacedDigit()
-                .foregroundStyle(confianca == .estimado ? Tema.atencao : Tema.texto)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(rotulo)
-                .font(Tipo.legenda)
-                .foregroundStyle(Tema.textoSecundario)
+        VStack(alignment: .leading, spacing: Espaco.m) {
+            HStack(alignment: .firstTextBaseline) {
+                RotuloSecao(titulo)
+                Spacer()
+                acao
+                    .font(Tipo.legenda.weight(.semibold))
+                    .foregroundStyle(Tema.primaria)
+            }
+            conteudo
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
-    /// Direto de uma Medida: sem valor = "—", estimado = "≈".
-    init(_ medida: Medida, rotulo: String, formatar: (Double) -> String) {
-        self.valor = medida.valor.map(formatar) ?? "—"
-        self.rotulo = rotulo
-        self.confianca = medida.valor == nil ? .indeterminado : medida.confianca
+extension Secao where Acao == EmptyView {
+    init(_ titulo: String, @ViewBuilder conteudo: () -> Conteudo) {
+        self.init(titulo, acao: { EmptyView() }, conteudo: conteudo)
     }
+}
 
-    init(valor: String, rotulo: String, confianca: Confianca = .confirmado) {
+// MARK: - Números
+
+/// Número + rótulo pequeno. "≈" em âmbar quando estimado, "—" quando não há dado.
+struct Metrica: View {
+    let valor: String
+    let rotulo: String
+    var estimado = false
+
+    init(_ valor: String, _ rotulo: String, estimado: Bool = false) {
         self.valor = valor
         self.rotulo = rotulo
-        self.confianca = confianca
+        self.estimado = estimado
     }
 
-    private var valorTexto: String {
-        switch confianca {
-        case .confirmado:    return valor
-        case .estimado:      return "≈ " + valor
-        case .indeterminado: return "—"
+    init(_ medida: Medida, _ rotulo: String, formatar: (Double) -> String) {
+        self.init(medida.valor.map(formatar) ?? "—", rotulo,
+                  estimado: medida.valor != nil && medida.confianca == .estimado)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text((estimado ? "≈ " : "") + valor)
+                .font(Tipo.metrica)
+                .monospacedDigit()
+                .foregroundStyle(estimado ? Tema.atencao : Tema.texto)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(rotulo)
+                .font(Tipo.legenda)
+                .foregroundStyle(Tema.textoSecundario)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct GradeMetricas<Conteudo: View>: View {
+    var colunas = 3
+    let conteudo: Conteudo
+
+    init(colunas: Int = 3, @ViewBuilder conteudo: () -> Conteudo) {
+        self.colunas = colunas
+        self.conteudo = conteudo()
+    }
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Espaco.m, alignment: .topLeading), count: colunas),
+                  alignment: .leading, spacing: Espaco.l) {
+            conteudo
         }
     }
 }
 
-/// Estado de operação: ponto colorido + texto. Discreto, sem caixa.
+/// Linha "rótulo ........ valor".
+struct LinhaMetrica: View {
+    let titulo: String
+    let valor: String
+    var cor: Color = Tema.texto
+
+    init(_ titulo: String, _ valor: String, cor: Color = Tema.texto) {
+        self.titulo = titulo
+        self.valor = valor
+        self.cor = cor
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(titulo).font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+            Spacer(minLength: Espaco.m)
+            Text(valor).font(Tipo.apoio.weight(.medium)).monospacedDigit().foregroundStyle(cor)
+        }
+        .padding(.vertical, 10)
+    }
+}
+
+extension Medida {
+    func texto(_ formatar: (Double) -> String) -> String {
+        guard let v = valor, confianca != .indeterminado else { return "—" }
+        return (confianca == .estimado ? "≈ " : "") + formatar(v)
+    }
+}
+
+// MARK: - Estado
+
 struct PontoEstado: View {
     let texto: String
     let cor: Color
-    var pulsando = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(cor)
-                .frame(width: 8, height: 8)
-                .opacity(pulsando ? 0.9 : 1)
+        HStack(spacing: 7) {
+            Circle().fill(cor).frame(width: 9, height: 9)
             Text(texto)
-                .font(Tipo.legenda.weight(.medium))
-                .foregroundStyle(Tema.textoSecundario)
+                .font(Tipo.apoio.weight(.semibold))
+                .foregroundStyle(Tema.texto)
         }
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Botão principal (Iniciar turno). Cheio, cor da marca por padrão.
+struct Selo: View {
+    let texto: String
+    let cor: Color
+
+    var body: some View {
+        Text(texto)
+            .font(.caption2.weight(.bold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(cor.opacity(0.16), in: Capsule())
+            .foregroundStyle(cor)
+    }
+}
+
+/// Só para problema que pede ação do motorista.
+struct Alerta: View {
+    let texto: String
+    var acaoTitulo: String?
+    var acao: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: Espaco.m) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Tema.atencao)
+            Text(texto).font(Tipo.apoio.weight(.medium)).foregroundStyle(Tema.texto)
+            Spacer(minLength: Espaco.s)
+            if let acaoTitulo, let acao {
+                Button(acaoTitulo, action: acao)
+                    .font(Tipo.apoio.weight(.semibold))
+                    .foregroundStyle(Tema.primaria)
+            }
+        }
+        .padding(.horizontal, Espaco.m)
+        .padding(.vertical, 12)
+        .background(Tema.atencao.opacity(0.12), in: RoundedRectangle(cornerRadius: Raio.botao))
+    }
+}
+
+// MARK: - Ações
+
 struct BotaoPrimario: ButtonStyle {
     var cor: Color = Tema.primaria
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 54)
+            .frame(maxWidth: .infinity, minHeight: 56)
             .background(cor.opacity(configuration.isPressed ? 0.75 : 1), in: RoundedRectangle(cornerRadius: Raio.botao))
             .foregroundStyle(.white)
     }
 }
 
-/// Botão secundário (Pausar, Abastecimento). Contorno leve, sem preenchimento forte.
 struct BotaoSecundario: ButtonStyle {
     var cor: Color = Tema.texto
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.headline)
+            .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity, minHeight: 50)
             .background(Tema.superficieAlta.opacity(configuration.isPressed ? 0.6 : 1),
                         in: RoundedRectangle(cornerRadius: Raio.botao))
@@ -248,7 +283,6 @@ struct BotaoSecundario: ButtonStyle {
     }
 }
 
-/// Chip de filtro (Mapa, Atividade).
 struct ChipFiltro: View {
     let titulo: String
     let ativo: Bool
@@ -257,166 +291,35 @@ struct ChipFiltro: View {
     var body: some View {
         Button(action: acao) {
             Text(titulo)
-                .font(Tipo.apoio.weight(.medium))
+                .font(Tipo.apoio.weight(.semibold))
                 .padding(.horizontal, 14)
                 .frame(minHeight: 34)
-                .background(ativo ? Tema.primaria : Tema.superficieAlta, in: Capsule())
-                .foregroundStyle(ativo ? Color.white : Tema.texto)
+                .background(ativo ? Tema.texto : Tema.superficieAlta, in: Capsule())
+                .foregroundStyle(ativo ? Tema.fundo : Tema.textoSecundario)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(ativo ? .isSelected : [])
     }
 }
 
-/// Tela/bloco vazio: ícone, frase curta e uma ação opcional.
-struct EstadoVazio: View {
-    let icone: String
-    let titulo: String
-    let texto: String
-    var acaoTitulo: String?
-    var acao: (() -> Void)?
+/// Fileira de chips que rola na horizontal.
+struct FiltrosChips<Valor: Hashable>: View {
+    let opcoes: [Valor]
+    let nome: (Valor) -> String
+    @Binding var selecao: Valor
 
     var body: some View {
-        VStack(spacing: Espaco.m) {
-            Image(systemName: icone)
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Tema.textoTerciario)
-            Text(titulo)
-                .font(Tipo.titulo)
-                .foregroundStyle(Tema.texto)
-            Text(texto)
-                .font(Tipo.apoio)
-                .foregroundStyle(Tema.textoSecundario)
-                .multilineTextAlignment(.center)
-            if let acaoTitulo, let acao {
-                Button(acaoTitulo, action: acao)
-                    .buttonStyle(BotaoSecundario(cor: Tema.primaria))
-                    .frame(maxWidth: 240)
-                    .padding(.top, Espaco.s)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Espaco.xl)
-        .padding(.horizontal, Espaco.margem)
-    }
-}
-
-/// Aviso: responde (1) o que aconteceu, (2) se afeta algum número, (3) se precisa fazer algo.
-/// Vermelho só pra problema que pede ação.
-struct Aviso: View {
-    enum Nivel { case informacao, atencao, estimativa, problema }
-    let nivel: Nivel
-    let titulo: String
-    var impacto: String?
-    var acaoTitulo: String?
-    var acao: (() -> Void)?
-
-    init(_ nivel: Nivel, _ titulo: String, impacto: String? = nil,
-         acaoTitulo: String? = nil, acao: (() -> Void)? = nil) {
-        self.nivel = nivel
-        self.titulo = titulo
-        self.impacto = impacto
-        self.acaoTitulo = acaoTitulo
-        self.acao = acao
-    }
-
-    private var cor: Color {
-        switch nivel {
-        case .informacao: return Tema.primaria
-        case .atencao:    return Tema.atencao
-        case .estimativa: return Tema.atencao
-        case .problema:   return Tema.erro
-        }
-    }
-
-    private var icone: String {
-        switch nivel {
-        case .informacao: return "info.circle.fill"
-        case .atencao:    return "exclamationmark.triangle.fill"
-        case .estimativa: return "questionmark.circle.fill"
-        case .problema:   return "exclamationmark.octagon.fill"
-        }
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Espaco.m) {
-            Image(systemName: icone)
-                .font(.body)
-                .foregroundStyle(cor)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(titulo)
-                    .font(Tipo.apoio.weight(.semibold))
-                    .foregroundStyle(Tema.texto)
-                if let impacto {
-                    Text(impacto)
-                        .font(Tipo.legenda)
-                        .foregroundStyle(Tema.textoSecundario)
-                }
-                if let acaoTitulo, let acao {
-                    Button(acaoTitulo, action: acao)
-                        .font(Tipo.apoio.weight(.semibold))
-                        .foregroundStyle(nivel == .problema ? Tema.erro : Tema.primaria)
-                        .buttonStyle(.plain)
-                        .padding(.top, 2)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Espaco.s) {
+                ForEach(opcoes, id: \.self) { o in
+                    ChipFiltro(titulo: nome(o), ativo: selecao == o) { selecao = o }
                 }
             }
-            .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+            .padding(.horizontal, Espaco.margem)
         }
-        .padding(Espaco.m)
-        .background(cor.opacity(0.10), in: RoundedRectangle(cornerRadius: Raio.botao))
-        .accessibilityElement(children: .combine)
     }
 }
 
-/// Carregando: discreto, com texto do que está acontecendo.
-struct Carregando: View {
-    let texto: String
-
-    var body: some View {
-        HStack(spacing: Espaco.s) {
-            ProgressView()
-            Text(texto)
-                .font(Tipo.apoio)
-                .foregroundStyle(Tema.textoSecundario)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, Espaco.l)
-    }
-}
-
-/// Bloco de conteúdo (superfície leve, sem borda nem sombra). Título opcional.
-struct Bloco<Conteudo: View>: View {
-    let titulo: String?
-    var subtitulo: String?
-    let conteudo: Conteudo
-
-    init(_ titulo: String? = nil, subtitulo: String? = nil, @ViewBuilder conteudo: () -> Conteudo) {
-        self.titulo = titulo
-        self.subtitulo = subtitulo
-        self.conteudo = conteudo()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Espaco.m) {
-            if titulo != nil || subtitulo != nil {
-                VStack(alignment: .leading, spacing: 2) {
-                    if let titulo { RotuloSecao(titulo) }
-                    if let subtitulo {
-                        Text(subtitulo).font(Tipo.legenda).foregroundStyle(Tema.textoTerciario)
-                    }
-                }
-            }
-            conteudo
-        }
-        .padding(Espaco.bloco)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Tema.superficie, in: RoundedRectangle(cornerRadius: Raio.bloco))
-    }
-}
-
-/// Linha que leva a outra tela: ícone, título, valor e seta.
 struct LinhaNavegacao: View {
     let titulo: String
     let icone: String
@@ -431,7 +334,6 @@ struct LinhaNavegacao: View {
     var body: some View {
         HStack(spacing: Espaco.m) {
             Image(systemName: icone)
-                .font(.body)
                 .foregroundStyle(Tema.primaria)
                 .frame(width: 24)
             Text(titulo).font(Tipo.corpo).foregroundStyle(Tema.texto)
@@ -439,12 +341,38 @@ struct LinhaNavegacao: View {
             Text(valor).font(Tipo.apoio).monospacedDigit().foregroundStyle(Tema.textoSecundario)
             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Tema.textoTerciario)
         }
-        .padding(.vertical, Espaco.m)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
     }
 }
 
-/// Onde foi o tempo: uma barra dividida por estado + legenda.
+struct EstadoVazio: View {
+    let icone: String
+    let titulo: String
+
+    var body: some View {
+        VStack(spacing: Espaco.m) {
+            Image(systemName: icone)
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(Tema.textoTerciario)
+            Text(titulo)
+                .font(Tipo.apoio.weight(.medium))
+                .foregroundStyle(Tema.textoSecundario)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, Espaco.xxl)
+    }
+}
+
+struct Divisoria: View {
+    var body: some View {
+        Rectangle().fill(Tema.linha).frame(height: 1 / UIScreen.main.scale)
+    }
+}
+
+// MARK: - Barras
+
+/// Tempo por estado numa barra só, com legenda curta.
 struct BarraEstados: View {
     let tempos: [EstadoMotorista: TimeInterval]
     static let ordem: [EstadoMotorista] = [.emCorrida, .aCaminho, .aguardando, .pausado, .semLeitura]
@@ -464,24 +392,24 @@ struct BarraEstados: View {
         let total = max(1, lista.reduce(0) { $0 + $1.segundos })
         VStack(alignment: .leading, spacing: Espaco.m) {
             GeometryReader { g in
-                let util = g.size.width - CGFloat(max(0, lista.count - 1)) * 2
-                HStack(spacing: 2) {
+                let util = g.size.width - CGFloat(max(0, lista.count - 1)) * 3
+                HStack(spacing: 3) {
                     ForEach(lista) { item in
-                        RoundedRectangle(cornerRadius: 3)
+                        RoundedRectangle(cornerRadius: 4)
                             .fill(item.estado.cor)
-                            .frame(width: max(3, util * item.segundos / total))
+                            .frame(width: max(4, util * item.segundos / total))
                     }
                 }
             }
-            .frame(height: 10)
+            .frame(height: 12)
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
                       alignment: .leading, spacing: Espaco.s) {
                 ForEach(lista) { item in
                     HStack(spacing: 6) {
-                        Circle().fill(item.estado.cor).frame(width: 8, height: 8)
+                        Circle().fill(item.estado.cor).frame(width: 7, height: 7)
                         Text(item.estado.nome).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario)
-                        Text(Duracao.curta(item.segundos) + String(format: " · %.0f%%", item.segundos / total * 100))
-                            .font(Tipo.legenda.weight(.medium)).monospacedDigit().foregroundStyle(Tema.texto)
+                        Text(Duracao.curta(item.segundos)).font(Tipo.legenda.weight(.semibold)).monospacedDigit()
+                            .foregroundStyle(Tema.texto)
                     }
                 }
             }
@@ -490,14 +418,13 @@ struct BarraEstados: View {
     }
 }
 
-/// Progresso da meta do dia. Menta só quando atingida.
 struct BarraMeta: View {
     let valor: Double
     let meta: Double
 
     var body: some View {
         let atingida = valor >= meta
-        VStack(alignment: .leading, spacing: 6) {
+        HStack(spacing: Espaco.m) {
             GeometryReader { g in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Tema.superficieAlta)
@@ -506,32 +433,38 @@ struct BarraMeta: View {
                 }
             }
             .frame(height: 6)
-            Text(atingida ? "Meta do dia atingida · \(Formato.reais(meta))"
-                          : "Hoje: \(Formato.reais(valor)) de \(Formato.reais(meta)) de meta")
-                .font(Tipo.legenda)
+            Text("meta \(Formato.reais(meta))")
+                .font(Tipo.legenda.weight(.medium))
+                .monospacedDigit()
                 .foregroundStyle(atingida ? Tema.positivo : Tema.textoSecundario)
+                .fixedSize()
         }
-    }
-}
-
-/// Divisória fina.
-struct Divisoria: View {
-    var body: some View {
-        Rectangle().fill(Tema.linha).frame(height: 1 / UIScreen.main.scale)
     }
 }
 
 // MARK: - Estados da operação
 
 extension EstadoMotorista {
-    /// Cor do estado no painel e no mapa. Aguardando é neutro de propósito: não é bom nem ruim.
     var cor: Color {
         switch self {
         case .emCorrida:  return Tema.positivo
         case .aCaminho:   return Tema.mapaIndoBuscar
         case .aguardando: return Tema.neutro
         case .pausado:    return Tema.atencao
-        case .semLeitura: return Tema.textoTerciario   // indeterminado, não é erro
+        case .semLeitura: return Tema.textoTerciario
         }
+    }
+}
+
+// MARK: - Formatos de tela
+
+extension Datas {
+    static func hora(_ d: Date) -> String { d.formatted(date: .omitted, time: .shortened) }
+
+    static func corridas(_ n: Int) -> String { n == 1 ? "1 corrida" : "\(n) corridas" }
+
+    /// "sábado, 26 de set."
+    static func longa(_ d: Date) -> String {
+        d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated).locale(Locale(identifier: "pt_BR")))
     }
 }

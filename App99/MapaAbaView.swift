@@ -31,8 +31,6 @@ enum FiltroMapa: String, CaseIterable, Identifiable {
 
 // MARK: - Aba Mapa
 
-/// Mapa do turno como ferramenta de análise: filtros, legenda, toque no embarque/desembarque abre a corrida.
-/// Chega focado quando outra tela manda (corrida → mapa, hora da Atividade → mapa).
 struct MapaAbaView: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared
@@ -57,10 +55,15 @@ struct MapaAbaView: View {
     var body: some View {
         Group {
             if let t = turno {
-                conteudo(turnos.resumo(t))
+                let r = turnos.resumo(t)
+                if r.temGPS {
+                    mapa(r)
+                } else {
+                    EstadoVazio(icone: "location.slash", titulo: "Sem trajeto neste turno")
+                        .frame(maxHeight: .infinity)
+                }
             } else {
-                EstadoVazio(icone: "map", titulo: "Nenhum turno ainda",
-                            texto: "O trajeto aparece aqui quando você rodar um turno com o GPS ligado.")
+                EstadoVazio(icone: "map", titulo: "Nenhum turno ainda")
                     .frame(maxHeight: .infinity)
             }
         }
@@ -89,123 +92,108 @@ struct MapaAbaView: View {
         .onAppear(perform: aplicarFoco)
         .onChange(of: nav.focoMapa) { _ in aplicarFoco() }
         .sheet(item: $aberta) { a in
-            if let t = turno, let c = turnos.resumo(t).corridas.first(where: { $0.id == a.id }) {
-                NavigationStack {
-                    CorridaDetalheView(c: c, r: turnos.resumo(t))
-                        .toolbar { Button("OK") { aberta = nil } }
+            if let t = turno {
+                let r = turnos.resumo(t)
+                if let c = r.corridas.first(where: { $0.id == a.id }) {
+                    NavigationStack {
+                        CorridaDetalheView(c: c, r: r)
+                            .toolbar { Button("OK") { aberta = nil } }
+                    }
+                    .presentationDetents([.medium, .large])
                 }
             }
         }
     }
 
-    @ViewBuilder
-    private func conteudo(_ r: ResumoTurno) -> some View {
-        VStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Espaco.s) {
-                    ForEach(FiltroMapa.allCases) { f in
-                        ChipFiltro(titulo: f.nome, ativo: filtro == f) { filtro = f }
+    private func mapa(_ r: ResumoTurno) -> some View {
+        MapaTurnoView(r: r, filtro: filtro, intervalo: intervalo, corridaFoco: corridaFoco,
+                      enquadrar: enquadrar) { id in aberta = CorridaAberta(id: id) }
+            .ignoresSafeArea(edges: .bottom)
+            .overlay(alignment: .top) {
+                VStack(spacing: Espaco.s) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(FiltroMapa.allCases) { f in
+                                Button { filtro = f } label: {
+                                    Text(f.nome)
+                                        .font(Tipo.legenda.weight(.semibold))
+                                        .padding(.horizontal, 12)
+                                        .frame(minHeight: 32)
+                                        .background(filtro == f ? AnyShapeStyle(Tema.texto) : AnyShapeStyle(.regularMaterial), in: Capsule())
+                                        .foregroundStyle(filtro == f ? Tema.fundo : Tema.texto)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.horizontal, Espaco.margem)
+                    }
+                    if let texto = textoFoco(r) {
+                        Button(action: limparFoco) {
+                            HStack(spacing: 6) {
+                                Text(texto)
+                                Image(systemName: "xmark")
+                            }
+                            .font(Tipo.legenda.weight(.semibold))
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 30)
+                            .background(Tema.primaria, in: Capsule())
+                            .foregroundStyle(.white)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, Espaco.margem)
-                .padding(.vertical, Espaco.s)
+                .padding(.top, Espaco.s)
             }
-
-            if let texto = textoFoco(r) {
-                HStack {
-                    Image(systemName: "scope").foregroundStyle(Tema.primaria)
-                    Text(texto).font(Tipo.apoio).foregroundStyle(Tema.texto)
+            .overlay(alignment: .bottom) {
+                HStack(alignment: .bottom) {
+                    legenda
                     Spacer()
-                    Button("Mostrar tudo") { limparFoco() }
-                        .font(Tipo.apoio.weight(.semibold))
-                        .foregroundStyle(Tema.primaria)
-                }
-                .padding(.horizontal, Espaco.margem)
-                .padding(.vertical, Espaco.s)
-                .background(Tema.superficie)
-            }
-
-            if r.temGPS {
-                ZStack(alignment: .bottomTrailing) {
-                    MapaTurnoView(r: r, filtro: filtro, intervalo: intervalo, corridaFoco: corridaFoco,
-                                  enquadrar: enquadrar) { id in aberta = CorridaAberta(id: id) }
                     Button { enquadrar += 1 } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        Image(systemName: "scope")
                             .font(.body.weight(.semibold))
                             .frame(width: 44, height: 44)
-                            .background(Tema.superficie, in: Circle())
+                            .background(.regularMaterial, in: Circle())
                             .foregroundStyle(Tema.primaria)
                     }
-                    .accessibilityLabel("Enquadrar o trajeto")
-                    .padding(Espaco.m)
+                    .accessibilityLabel("Enquadrar")
                 }
-                legenda(r)
-            } else {
-                EstadoVazio(icone: "location.slash", titulo: "Sem trajeto neste turno",
-                            texto: "O GPS não registrou pontos neste turno (sem permissão ou desligado). Os números da tela continuam valendo; só o mapa e os km ficam de fora.")
-                    .frame(maxHeight: .infinity)
+                .padding(.horizontal, Espaco.margem)
+                .padding(.bottom, Espaco.m)
             }
-        }
     }
 
-    private func legenda(_ r: ResumoTurno) -> some View {
-        VStack(alignment: .leading, spacing: Espaco.xs) {
-            HStack(spacing: Espaco.m) {
-                switch filtro {
-                case .ofertas:
-                    item("Oferta recebida (onde você estava)", Tema.neutro)
-                case .abastecimento:
-                    item("Abastecimento", Color.purple)
-                default:
-                    if filtro == .todas || filtro == .corridas { item("Em corrida", Tema.mapaEmCorrida) }
-                    if filtro == .todas || filtro == .busca { item("Indo buscar", Tema.mapaIndoBuscar) }
-                    if filtro == .todas || filtro == .semCorrida { item("Sem corrida", Tema.mapaSemCorrida) }
-                }
+    private var legenda: some View {
+        HStack(spacing: Espaco.m) {
+            switch filtro {
+            case .ofertas:       item("Oferta", Tema.neutro)
+            case .abastecimento: item("Abastecimento", Tema.abastecimento)
+            case .corridas:      item("Em corrida", Tema.mapaEmCorrida)
+            case .busca:         item("Busca", Tema.mapaIndoBuscar)
+            case .semCorrida:    item("Sem corrida", Tema.mapaSemCorrida)
+            case .todas:
+                item("Corrida", Tema.mapaEmCorrida)
+                item("Busca", Tema.mapaIndoBuscar)
+                item("Livre", Tema.mapaSemCorrida)
             }
-            Text(resumoFiltro(r))
-                .font(Tipo.legenda)
-                .monospacedDigit()
-                .foregroundStyle(Tema.textoSecundario)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, Espaco.margem)
-        .padding(.vertical, Espaco.m)
-        .background(Tema.superficie)
+        .padding(.horizontal, 12)
+        .frame(minHeight: 32)
+        .background(.regularMaterial, in: Capsule())
     }
 
     private func item(_ nome: String, _ cor: Color) -> some View {
         HStack(spacing: 5) {
-            Capsule().fill(cor).frame(width: 14, height: 5)
-            Text(nome).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario)
-        }
-    }
-
-    private func resumoFiltro(_ r: ResumoTurno) -> String {
-        switch filtro {
-        case .todas:
-            return "\(PainelTurno.corridas(r.corridasFeitas)) · " + (r.km.valor.map(Formato.km) ?? "— km")
-                + " · toque num embarque ou desembarque e depois no (i) pra abrir a corrida"
-        case .corridas, .busca, .semCorrida:
-            let e = filtro.estadoDestacado ?? .emCorrida
-            let km = r.kmPorEstado[e] ?? 0
-            let tempo = r.tempoPorEstado[e] ?? 0
-            return "\(e.nome): \(Formato.km(km)) · \(Duracao.curta(tempo))"
-        case .ofertas:
-            let comLocal = r.ofertas.filter { $0.local != nil }.count
-            return "\(comLocal) de \(r.ofertas.count) ofertas com local. Oferta não é faturamento."
-        case .abastecimento:
-            let comLocal = r.custos.filter { $0.tipo == .combustivel && $0.local != nil }.count
-            let total = r.custos.filter { $0.tipo == .combustivel }.count
-            return total == 0 ? "Nenhum abastecimento neste turno." : "\(comLocal) de \(total) abastecimentos com local."
+            Capsule().fill(cor).frame(width: 12, height: 4)
+            Text(nome).font(.caption2.weight(.semibold)).foregroundStyle(Tema.texto)
         }
     }
 
     private func textoFoco(_ r: ResumoTurno) -> String? {
         if let id = corridaFoco, let c = r.corridas.first(where: { $0.id == id }) {
-            return "Corrida das \(c.inicioVisto.map(PainelTurno.hora) ?? "—")"
+            return "Corrida · \(c.terminoVisto.map(Datas.hora) ?? "")"
         }
         if let i = intervalo {
-            return "Mostrando \(PainelTurno.hora(i.start))–\(PainelTurno.hora(i.end))"
+            return "\(Datas.hora(i.start))–\(Datas.hora(i.end))"
         }
         return nil
     }
@@ -228,11 +216,11 @@ struct MapaAbaView: View {
     }
 }
 
-// MARK: - Mapa (MKMapView: o Map do SwiftUI com overlays só existe no iOS 17)
+// MARK: - Mapa
 
-/// Trajeto colorido por estado, embarques (●) e desembarques (⚑), ofertas e abastecimentos.
-/// Enquadra só na primeira vez e quando muda o que se está vendo (turno, filtro, foco, botão):
-/// ponto novo do GPS redesenha a linha mas não mexe no zoom que você deu.
+/// MKMapView: o Map do SwiftUI com linhas e marcadores só existe a partir do iOS 17.
+/// Enquadra só quando muda o que se está vendo (turno, filtro, foco, botão): ponto novo do GPS
+/// redesenha a linha sem mexer no zoom do usuário.
 struct MapaTurnoView: UIViewRepresentable {
     let r: ResumoTurno
     var filtro: FiltroMapa = .todas
@@ -314,26 +302,25 @@ struct MapaTurnoView: UIViewRepresentable {
 
         if filtro == .todas || filtro == .corridas {
             for c in r.corridas where !c.cancelada && (corridaFoco == nil || c.id == corridaFoco) {
-                let valor = c.valorTexto
+                guard c.feita else { continue }
                 if let o = c.origem, naJanela(c.aBordoEm) {
-                    mapa.addAnnotation(Marca(o, .embarque, "Embarque · \(c.aBordoEm.map(PainelTurno.hora) ?? "")", valor, corrida: c.id))
+                    mapa.addAnnotation(Marca(o, .embarque, c.valorTexto, "Embarque · " + (c.aBordoEm.map(Datas.hora) ?? ""), corrida: c.id))
                 }
                 if let d = c.destino, naJanela(c.fimEm) {
-                    mapa.addAnnotation(Marca(d, .desembarque, "Desembarque · \(c.fimEm.map(PainelTurno.hora) ?? "")", valor, corrida: c.id))
+                    mapa.addAnnotation(Marca(d, .desembarque, c.valorTexto, "Desembarque · " + (c.fimEm.map(Datas.hora) ?? ""), corrida: c.id))
                 }
             }
         }
         if filtro == .ofertas {
             for o in r.ofertas where naJanela(o.em) {
                 guard let l = o.local else { continue }
-                mapa.addAnnotation(Marca(l, .oferta, "Oferta · \(PainelTurno.hora(o.em))",
-                                         "\(Formato.reais(Double(o.valorCent) / 100)) · não é faturamento"))
+                mapa.addAnnotation(Marca(l, .oferta, Formato.reais(Double(o.valorCent) / 100), "Oferta · " + Datas.hora(o.em)))
             }
         }
         if filtro == .todas || filtro == .abastecimento {
             for c in r.custos where c.tipo == .combustivel && naJanela(c.em) {
                 guard let l = c.local else { continue }
-                mapa.addAnnotation(Marca(l, .abastecimento, "Abastecimento · \(PainelTurno.hora(c.em))", c.resumo))
+                mapa.addAnnotation(Marca(l, .abastecimento, Formato.reais(c.valor), "Abastecimento · " + Datas.hora(c.em)))
             }
         }
     }
@@ -409,7 +396,7 @@ struct MapaTurnoView: UIViewRepresentable {
                 v.glyphImage = UIImage(systemName: "tag.fill")
                 v.displayPriority = .defaultLow
             case .abastecimento:
-                v.markerTintColor = .systemPurple
+                v.markerTintColor = UIColor(Tema.abastecimento)
                 v.glyphImage = UIImage(systemName: "fuelpump.fill")
             }
             if m.corrida != nil {
@@ -418,7 +405,6 @@ struct MapaTurnoView: UIViewRepresentable {
             return v
         }
 
-        /// Toque no (i) do balão de um embarque/desembarque abre a corrida.
         func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
             guard let m = view.annotation as? Marca, let id = m.corrida else { return }
             aoTocarCorrida?(id)

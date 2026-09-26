@@ -1,7 +1,144 @@
 import Foundation
 
-// Análises de vários turnos. Só descrevem o que aconteceu NOS SEUS dados, sempre com a quantidade
-// de casos ao lado. Nunca classificam lugar ou horário como "bom" ou "ruim": quem decide é você.
+// Análises descrevem o que aconteceu nos dados do usuário, sem classificar lugar ou horário.
+
+// MARK: - Soma de vários turnos
+
+/// Totais de um conjunto de turnos.
+struct ResumoAgregado {
+    let resumos: [ResumoTurno]
+
+    var turnos: Int { resumos.count }
+    var duracao: TimeInterval { resumos.reduce(0) { $0 + ($1.duracao.valor ?? 0) } }
+    var confirmado: Double { resumos.reduce(0) { $0 + ($1.faturamentoConfirmado.valor ?? 0) } }
+    var estimado: Double { resumos.reduce(0) { $0 + ($1.faturamentoEstimado.valor ?? 0) } }
+    var combustivel: Double { resumos.reduce(0) { $0 + ($1.combustivel.valor ?? 0) } }
+    var custosRegistrados: Double { resumos.reduce(0) { $0 + ($1.combustivel.valor ?? 0) + ($1.outrosCustos.valor ?? 0) } }
+    var corridasConfirmadas: Int { resumos.reduce(0) { $0 + $1.corridasConfirmadas } }
+    var corridasFeitas: Int { resumos.reduce(0) { $0 + $1.corridasFeitas } }
+    var corridasEstimadas: Int { resumos.reduce(0) { $0 + $1.corridasEstimadas } }
+    var ofertas: Int { resumos.reduce(0) { $0 + $1.ofertas.count } }
+    var ofertasAceitas: Int { resumos.reduce(0) { $0 + $1.ofertas.filter { $0.resultado == .aceita }.count } }
+
+    var tempoPorEstado: [EstadoMotorista: TimeInterval] {
+        resumos.reduce(into: [:]) { t, r in for (e, s) in r.tempoPorEstado { t[e, default: 0] += s } }
+    }
+
+    // Distância: só dos turnos com GPS (e R$/km só com o faturamento desses mesmos turnos)
+    private var comGPS: [ResumoTurno] { resumos.filter { $0.temGPS } }
+
+    var km: Medida {
+        guard !comGPS.isEmpty else { return .indeterminada(.gps, "nenhum turno com GPS") }
+        let total = comGPS.reduce(0) { $0 + ($1.km.valor ?? 0) }
+        let parcial = comGPS.count < resumos.count
+        return Medida(valor: total, confianca: parcial ? .estimado : .confirmado, fonte: .gps,
+                      nota: parcial ? "só \(comGPS.count) de \(resumos.count) turnos tinham GPS" : nil)
+    }
+    var porKm: Medida {
+        let km = comGPS.reduce(0) { $0 + ($1.km.valor ?? 0) }
+        guard km > 0 else { return .indeterminada(.calculo, "sem km de GPS") }
+        let fat = comGPS.reduce(0) { $0 + ($1.faturamentoConfirmado.valor ?? 0) }
+        return Medida(valor: fat / km, confianca: comGPS.count < resumos.count ? .estimado : .confirmado,
+                      fonte: .calculo, nota: "confirmado ÷ km, só turnos com GPS")
+    }
+    var porHora: Medida {
+        guard duracao > 0 else { return .indeterminada(.calculo, "sem turnos") }
+        return Medida(valor: confirmado / (duracao / 3600), confianca: .confirmado, fonte: .calculo, nota: "confirmado ÷ horas de turno")
+    }
+    var resultado: Medida {
+        Medida(valor: confirmado - custosRegistrados, confianca: .estimado, fonte: .calculo,
+               nota: "confirmado − abastecimentos e custos registrados")
+    }
+
+    // MARK: Grupos
+
+    struct Grupo: Identifiable {
+        let id: String
+        var faturamento = 0.0
+        var corridas = 0
+        var ofertas = 0
+        var horas = 0.0
+        var km = 0.0
+        var porHora: Double? { horas >= 0.25 ? faturamento / horas : nil }
+        var porKm: Double? { km > 0 ? faturamento / km : nil }
+        var poucosDados: Bool { corridas < 3 }
+    }
+
+    /// Por faixa horária ou dia da semana: faturamento das corridas confirmadas (pela hora do fim),
+    /// ofertas recebidas e horas de turno naquele grupo (pra dar R$/h).
+    func grupos(_ a: Agrupamento) -> [Grupo] {
+        var g: [String: Grupo] = [:]
+        for r in resumos {
+            for c in r.corridas where c.confianca == .confirmado {
+                guard let quando = c.fimEm ?? c.encerradaEm ?? c.aceiteEm else { continue }
+                let k = Agrupamento.chave(quando, a)
+                g[k, default: Grupo(id: k)].faturamento += c.valor.valor ?? 0
+                g[k, default: Grupo(id: k)].corridas += 1
+            }
+            for o in r.ofertas {
+                let k = Agrupamento.chave(o.em, a)
+                g[k, default: Grupo(id: k)].ofertas += 1
+            }
+            for (k, s) in Self.horasPor(a, de: r.turno.inicio, ate: r.turno.fim ?? Date()) {
+                g[k, default: Grupo(id: k)].horas += s / 3600
+            }
+        }
+        return g.values.sorted { $0.id < $1.id }
+    }
+
+    /// Por região de embarque (só corridas confirmadas com GPS no embarque).
+    func regioes() -> [Grupo] {
+        var g: [String: Grupo] = [:]
+        for r in resumos {
+            for c in r.corridas where c.confianca == .confirmado {
+                guard let k = c.regiaoOrigem else { continue }
+                g[k, default: Grupo(id: k)].faturamento += c.valor.valor ?? 0
+                g[k, default: Grupo(id: k)].corridas += 1
+                g[k, default: Grupo(id: k)].km += c.kmGPS.valor ?? 0
+            }
+        }
+        return g.values.sorted { $0.faturamento > $1.faturamento }
+    }
+
+    /// Divide um intervalo em pedaços por hora e soma os segundos em cada grupo.
+    static func horasPor(_ a: Agrupamento, de inicio: Date, ate fim: Date, calendario: Calendar = .current) -> [String: TimeInterval] {
+        var r: [String: TimeInterval] = [:]
+        var t = inicio
+        while t < fim {
+            let proxima = calendario.nextDate(after: t, matching: DateComponents(minute: 0, second: 0),
+                                              matchingPolicy: .nextTime) ?? fim
+            let ate = min(proxima, fim)
+            r[Agrupamento.chave(t, a), default: 0] += ate.timeIntervalSince(t)
+            t = ate
+        }
+        return r
+    }
+}
+
+extension Periodo {
+    var nome: String {
+        switch self {
+        case .hoje:      return "Hoje"
+        case .ontem:     return "Ontem"
+        case .ultimos7:  return "7 dias"
+        case .ultimos30: return "30 dias"
+        case .semana:    return "Semana"
+        case .mes:       return "Mês"
+        }
+    }
+
+    /// Mesmo tamanho, logo antes (pra comparar).
+    func anterior(agora: Date = Date()) -> DateInterval {
+        let i = intervalo(agora: agora)
+        return DateInterval(start: i.start.addingTimeInterval(-i.duration), end: i.start)
+    }
+}
+
+extension Historico {
+    static func turnos(_ turnos: [Turno], entre i: DateInterval) -> [Turno] {
+        turnos.filter { $0.inicio >= i.start && $0.inicio < i.end }
+    }
+}
 
 extension ResumoAgregado {
 
@@ -133,10 +270,8 @@ extension ResumoAgregado {
         return g.values.sorted { $0.desembarques > $1.desembarques }
     }
 
-    /// Corridas que aconteceram (confirmadas + estimadas), em ordem.
     static func feitas(_ r: ResumoTurno) -> [CorridaAnalisada] {
-        r.corridas.filter { $0.confianca == .confirmado || $0.confianca == .estimado }
-            .sorted { ($0.inicioVisto ?? .distantPast) < ($1.inicioVisto ?? .distantPast) }
+        r.feitas.sorted { ($0.inicioVisto ?? .distantPast) < ($1.inicioVisto ?? .distantPast) }
     }
 
     static func depois(_ c: CorridaAnalisada, seguinte: CorridaAnalisada?, turno: Turno) -> Seguinte? {

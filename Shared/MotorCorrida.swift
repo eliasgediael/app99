@@ -24,6 +24,17 @@ enum TelaLida {
     }
 }
 
+/// Quem guarda o que o motor decide. Na leitura da tela é o Diario; no app, o reprocessamento de turnos antigos.
+protocol RegistroMotor: AnyObject {
+    func novoIdOferta() -> Int
+    func novoIdCorrida() -> Int
+    func contarOferta()
+    func somarConfirmada(valorCent: Int, custoCent: Int, metros: Int)
+    func somarEstimada(valorCent: Int)
+    func adicionar(_ evento: EventoLinha)
+    func sinal(_ s: SinalExtensao)
+}
+
 /// Máquina de estados das corridas. É o ÚNICO lugar que decide estado e faturamento.
 ///
 /// Regras:
@@ -68,7 +79,7 @@ final class MotorCorrida {
         var cancelada = false   // "cancelou" logo depois de sair: não foi aceita
     }
 
-    private let diario: Diario
+    private let diario: RegistroMotor
     /// Custo por km atual (vem dos ajustes); usado no custo das corridas confirmadas.
     var custoPorKm: Double = ConfigMoto().custoPorKm
 
@@ -89,7 +100,7 @@ final class MotorCorrida {
     private let validadeFila: TimeInterval = 30 * 60
     private let limiteCorridaAberta: TimeInterval = 3 * 3600
 
-    init(diario: Diario) {
+    init(diario: RegistroMotor) {
         self.diario = diario
     }
 
@@ -255,7 +266,7 @@ final class MotorCorrida {
             abertas[i].chegouEmbarque = true
             evento(.telaEmbarque, .tela, em: agora, corrida: id, motivo: .lidoNaTela)
         }
-        SinalExtensao.corridaAceita.enviar()
+        diario.sinal(.corridaAceita)
     }
 
     /// Abre uma corrida aceita (vista na tela ou inferida) e registra o aceite na linha do tempo.
@@ -403,7 +414,7 @@ final class MotorCorrida {
                                    metros: Int((km * 1000).rounded()))
             evento(.faturamentoConfirmado, .inferencia, em: agora, corrida: c.id, confianca: .confirmado,
                    motivo: .evidenciaCompleta, valorCent: valorCent ?? 0)
-            SinalExtensao.corridaFeita.enviar()
+            diario.sinal(.corridaFeita)
         case .estimada:
             diario.somarEstimada(valorCent: valorCent ?? 0)
             evento(.faturamentoEstimado, .inferencia, em: agora, corrida: c.id, confianca: .estimado,

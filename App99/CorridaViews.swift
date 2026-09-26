@@ -1,168 +1,155 @@
 import SwiftUI
 
-// Peças de corrida e oferta usadas no Turno, no resumo e em Viagens.
-// Tudo vem de CorridaAnalisada/OfertaAnalisada (calculadas da linha do tempo): nada é guardado aqui.
+// MARK: - Corridas que aconteceram
 
-// MARK: - Situação da corrida (texto e cor numa linguagem só)
-
-extension CorridaAnalisada {
-    var cancelada: Bool { estado == .cancelada }
-
-    /// "Confirmada", "Estimada"…
-    var situacao: String {
-        if cancelada { return "Cancelada" }
-        switch confianca {
-        case .confirmado?:    return "Confirmada"
-        case .estimado?:      return "Estimada"
-        case .indeterminado?: return "Sem confirmação"
-        case nil:             return "Em andamento"
-        }
+extension ResumoTurno {
+    /// Corridas feitas (confirmadas + estimadas), da mais antiga pra mais nova.
+    /// Oferta não aceita, cancelamento e registro sem valor não são corrida.
+    var feitas: [CorridaAnalisada] {
+        corridas.filter { $0.feita }.sorted { ($0.terminoVisto ?? .distantPast) < ($1.terminoVisto ?? .distantPast) }
     }
 
-    var corSituacao: Color {
-        if cancelada { return Tema.textoTerciario }
-        switch confianca {
-        case .confirmado?:    return Tema.positivo
-        case .estimado?:      return Tema.atencao
-        case .indeterminado?: return Tema.neutro
-        case nil:             return Tema.mapaIndoBuscar
-        }
+    var emAndamento: CorridaAnalisada? {
+        corridas.last { $0.confianca == nil && $0.estado != .cancelada }
     }
-
-    /// Valor como deve aparecer: confirmado normal, estimado com "≈", o resto sem valor.
-    var valorTexto: String {
-        if cancelada { return "Cancelada" }
-        switch confianca {
-        case .confirmado?: return c(valor.valor)
-        case .estimado?:   return valor.valor.map { "≈ " + Formato.reais($0) } ?? "Sem valor"
-        case .indeterminado?: return "Sem valor"
-        case nil:          return valorOfertaCent.map { Formato.reais(Double($0) / 100) + " a confirmar" } ?? "Em andamento"
-        }
-    }
-
-    private func c(_ v: Double?) -> String { v.map(Formato.reais) ?? "Sem valor" }
-
-    /// Quando começou pra quem olha a lista (aceite; se não foi visto, o embarque).
-    var inicioVisto: Date? { aceiteEm ?? aBordoEm ?? encerradaEm }
-    /// Quando terminou (tela de fim; se não foi vista, quando foi encerrada).
-    var terminoVisto: Date? { fimEm ?? encerradaEm }
 }
 
-// MARK: - Linha de corrida
+extension CorridaAnalisada {
+    var feita: Bool { confianca == .confirmado || confianca == .estimado }
+    var estimada: Bool { confianca == .estimado }
+    var cancelada: Bool { estado == .cancelada }
 
-/// Uma corrida numa lista: horário, valor, km, R$/km e duração. O resto fica no detalhe.
+    var valorTexto: String {
+        guard let v = valor.valor else { return "—" }
+        return (estimada ? "≈ " : "") + Formato.reais(v)
+    }
+
+    var inicioVisto: Date? { aceiteEm ?? aBordoEm ?? encerradaEm }
+    var terminoVisto: Date? { fimEm ?? encerradaEm }
+
+    /// "8,2 km · 18 min"
+    var resumoCurto: String {
+        [kmGPS.valor.map(Formato.km), duracao.valor.map(Duracao.curta)].compactMap { $0 }.joined(separator: " · ")
+    }
+}
+
+// MARK: - Linhas
+
+/// 21:18   R$ 8,70            8,2 km · 18 min
 struct LinhaCorrida: View {
     let c: CorridaAnalisada
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Espaco.m) {
-            Text(c.inicioVisto.map(PainelTurno.hora) ?? "—")
+            Text(c.terminoVisto.map(Datas.hora) ?? "—")
                 .font(Tipo.apoio.monospacedDigit())
                 .foregroundStyle(Tema.textoSecundario)
-                .frame(width: 50, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(c.valorTexto)
-                    .font(Tipo.corpo.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(c.confianca == .confirmado ? Tema.texto
-                                     : (c.confianca == .estimado ? Tema.atencao : Tema.textoSecundario))
-                if !detalhes.isEmpty {
-                    Text(detalhes)
-                        .font(Tipo.legenda)
-                        .monospacedDigit()
-                        .foregroundStyle(Tema.textoSecundario)
-                }
-            }
+                .frame(width: 46, alignment: .leading)
+            Text(c.valorTexto)
+                .font(Tipo.valor)
+                .monospacedDigit()
+                .foregroundStyle(c.estimada ? Tema.atencao : Tema.texto)
             Spacer(minLength: Espaco.s)
-            if c.confianca != .confirmado {
-                Text(c.situacao)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(c.corSituacao)
-            }
+            Text(c.resumoCurto)
+                .font(Tipo.legenda)
+                .monospacedDigit()
+                .foregroundStyle(Tema.textoSecundario)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 12)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
-
-    private var detalhes: String {
-        var partes: [String] = []
-        if let km = c.kmGPS.valor {
-            partes.append((c.kmGPS.confianca == .estimado ? "≈ " : "") + Formato.km(km))
-        } else if let v = c.viagemM, v > 0 {
-            partes.append(Formato.km(Double(v) / 1000) + " (oferta)")
-        }
-        if c.confianca == .confirmado, let pk = c.porKm.valor { partes.append(Formato.reais(pk) + "/km") }
-        if let d = c.duracao.valor { partes.append(Duracao.curta(d)) }
-        return partes.joined(separator: " · ")
-    }
 }
 
-// MARK: - Linha de oferta
-
-/// Oferta é neutra: nunca em menta, nunca somada. Mostra o que a tela mostrou e se foi aceita.
+/// Oferta: neutra, nunca somada.
 struct LinhaOferta: View {
     let o: OfertaAnalisada
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Espaco.m) {
-            Text(PainelTurno.hora(o.em))
+            Text(Datas.hora(o.em))
                 .font(Tipo.apoio.monospacedDigit())
+                .foregroundStyle(Tema.textoTerciario)
+                .frame(width: 46, alignment: .leading)
+            Text(Formato.reais(Double(o.valorCent) / 100))
+                .font(Tipo.corpo)
+                .monospacedDigit()
                 .foregroundStyle(Tema.textoSecundario)
-                .frame(width: 50, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Formato.reais(Double(o.valorCent) / 100))
-                    .font(Tipo.corpo)
-                    .monospacedDigit()
-                    .foregroundStyle(Tema.texto)
-                Text(([Formato.km(o.km), o.porKm.map { Formato.reais($0) + "/km" }, o.nota.map { "★ " + Formato.nota($0) }] as [String?])
-                    .compactMap { $0 }.joined(separator: " · "))
-                    .font(Tipo.legenda)
-                    .monospacedDigit()
+            Text(Formato.km(o.km))
+                .font(Tipo.legenda)
+                .monospacedDigit()
+                .foregroundStyle(Tema.textoTerciario)
+            Spacer(minLength: Espaco.s)
+            if o.resultado == .aceita {
+                Label("Aceita", systemImage: "checkmark")
+                    .font(Tipo.legenda.weight(.semibold))
                     .foregroundStyle(Tema.textoSecundario)
             }
-            Spacer(minLength: Espaco.s)
-            Text(resultado)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(o.resultado == .aceita ? Tema.texto : Tema.textoTerciario)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 10)
         .accessibilityElement(children: .combine)
-    }
-
-    private var resultado: String {
-        switch o.resultado {
-        case .aceita:    return "Aceita"
-        case .naoAceita: return "Não aceita"
-        case .emAberto:  return "Na tela"
-        }
     }
 }
 
-// MARK: - Detalhe da corrida
+// MARK: - Detalhe
 
-/// Primeiro o valor e a situação; depois km/tempo, o mapa, as etapas e a oferta.
-/// Dados técnicos (ligação oferta↔aceite, motivo, ids) ficam recolhidos no fim.
 struct CorridaDetalheView: View {
     let c: CorridaAnalisada
     var r: ResumoTurno? = nil
-    @State private var tecnico = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Espaco.xl) {
-                cabecalho
-                aviso
-                HStack(alignment: .top, spacing: Espaco.m) {
-                    MetricaCompacta(c.kmGPS, rotulo: "km (GPS)") { Formato.km($0) }
-                    MetricaCompacta(c.duracao, rotulo: "a bordo") { Duracao.curta($0) }
-                    MetricaCompacta(c.porKm, rotulo: "por km") { Formato.reais($0) }
-                    MetricaCompacta(c.porHora, rotulo: "por hora") { Formato.reais($0) }
+                VStack(alignment: .leading, spacing: Espaco.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: Espaco.s) {
+                        Text(c.valorTexto)
+                            .font(Tipo.destaque)
+                            .monospacedDigit()
+                            .foregroundStyle(c.estimada ? Tema.atencao : Tema.texto)
+                        if c.estimada { Selo(texto: "Estimada", cor: Tema.atencao) }
+                    }
+                    Text(horario)
+                        .font(Tipo.apoio)
+                        .foregroundStyle(Tema.textoSecundario)
                 }
+
                 mapa
-                etapas
-                oferta
-                detalhesTecnicos
+
+                GradeMetricas {
+                    Metrica(c.kmGPS, "km") { Formato.km($0) }
+                    Metrica(c.duracao, "a bordo") { Duracao.curta($0) }
+                    Metrica(c.porKm, "por km") { Formato.reais($0) }
+                }
+
+                Secao("Etapas") {
+                    VStack(alignment: .leading, spacing: 0) {
+                        etapa("Aceita", c.aceiteEm, cor: Tema.mapaIndoBuscar, ultima: false)
+                        etapa("Passageiro a bordo", c.aBordoEm, cor: Tema.mapaEmCorrida, ultima: false)
+                        etapa("Finalizada", c.fimEm ?? c.encerradaEm, cor: Tema.texto, ultima: true)
+                    }
+                }
+
+                if c.ofertaId != nil {
+                    Secao("Oferta") {
+                        VStack(spacing: 0) {
+                            if let v = c.valorOfertaCent {
+                                LinhaMetrica("Valor", Formato.reais(Double(v) / 100))
+                                Divisoria()
+                            }
+                            if let b = c.buscaM {
+                                LinhaMetrica("Até o passageiro", Formato.km(Double(b) / 1000))
+                                Divisoria()
+                            }
+                            if let v = c.viagemM {
+                                LinhaMetrica("Viagem", Formato.km(Double(v) / 1000))
+                            }
+                            if let n = c.nota {
+                                Divisoria()
+                                LinhaMetrica("Nota do passageiro", "★ " + Formato.nota(n))
+                            }
+                        }
+                    }
+                }
             }
             .padding(.horizontal, Espaco.margem)
             .padding(.vertical, Espaco.l)
@@ -172,129 +159,55 @@ struct CorridaDetalheView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var cabecalho: some View {
-        VStack(alignment: .leading, spacing: Espaco.xs) {
-            PontoEstado(texto: c.situacao, cor: c.corSituacao)
-            Text(c.valorTexto)
-                .font(Tipo.destaque)
-                .monospacedDigit()
-                .foregroundStyle(c.confianca == .confirmado ? Tema.texto
-                                 : (c.confianca == .estimado ? Tema.atencao : Tema.textoSecundario))
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-            Text(horario)
-                .font(Tipo.apoio)
-                .foregroundStyle(Tema.textoSecundario)
-        }
-    }
-
     private var horario: String {
         let dia = c.inicioVisto.map(Datas.curta) ?? ""
-        let de = c.inicioVisto.map(PainelTurno.hora) ?? "—"
-        let ate = c.terminoVisto.map(PainelTurno.hora) ?? "—"
-        return "\(dia) · \(de)–\(ate)"
+        let de = c.inicioVisto.map(Datas.hora) ?? "—"
+        let ate = c.terminoVisto.map(Datas.hora) ?? "—"
+        return "\(dia) · \(de) – \(ate)"
     }
 
-    @ViewBuilder
-    private var aviso: some View {
-        let motivo = c.motivo.texto(extra: c.falta)
-        if c.cancelada {
-            Aviso(.informacao, "Corrida cancelada", impacto: "Não entra em nenhum total.")
-        } else if c.confianca == .estimado {
-            Aviso(.estimativa, "Não deu pra confirmar esta corrida",
-                  impacto: "O valor fica fora do faturamento confirmado. " + motivo)
-        } else if c.confianca == .indeterminado {
-            Aviso(.informacao, "Corrida sem valor identificado",
-                  impacto: "Não entra em nenhum total. " + motivo)
-        } else if c.confianca == nil {
-            Aviso(.informacao, "Corrida em andamento", impacto: "O valor só conta depois da tela de fim da corrida.")
-        }
-    }
-
-    /// Mapa só desta corrida (busca + viagem) e atalho pro mapa do turno.
     @ViewBuilder
     private var mapa: some View {
-        if let r, r.temGPS, !c.cancelada, c.origem != nil || c.destino != nil || c.kmGPS.valor != nil {
-            VStack(alignment: .leading, spacing: Espaco.s) {
+        if let r, r.temGPS, c.origem != nil || c.destino != nil || c.kmGPS.valor != nil {
+            Button {
+                Navegacao.shared.abrirMapa(turno: r.turno.id, corrida: c.id)
+            } label: {
                 MapaTurnoView(r: r, corridaFoco: c.id, interativo: false)
-                    .frame(height: 200)
+                    .frame(height: 220)
                     .clipShape(RoundedRectangle(cornerRadius: Raio.bloco))
-                Button {
-                    Navegacao.shared.abrirMapa(turno: r.turno.id, corrida: c.id)
-                } label: {
-                    Label("Ver no mapa do turno", systemImage: "map")
-                        .font(Tipo.apoio.weight(.semibold))
-                        .foregroundStyle(Tema.primaria)
-                }
-            }
-        }
-    }
-
-    private var etapas: some View {
-        Bloco("Etapas") {
-            VStack(alignment: .leading, spacing: 0) {
-                etapa("Aceita", c.aceiteEm, vazio: "tela de aceite não vista")
-                Divisoria()
-                etapa("Passageiro a bordo", c.aBordoEm, vazio: "tela de embarque não vista")
-                Divisoria()
-                etapa(c.cancelada ? "Cancelada" : "Finalizada", c.cancelada ? c.encerradaEm : c.fimEm,
-                      vazio: c.encerradaEm.map { "tela de fim não vista · encerrada às " + PainelTurno.hora($0) } ?? "ainda aberta")
-            }
-        }
-    }
-
-    private func etapa(_ titulo: String, _ quando: Date?, vazio: String) -> some View {
-        LinhaMetrica(titulo, texto: Text(quando.map(PainelTurno.hora) ?? vazio)
-            .foregroundColor(quando == nil ? Tema.textoTerciario : Tema.texto))
-    }
-
-    @ViewBuilder
-    private var oferta: some View {
-        if c.ofertaId != nil {
-            Bloco("Oferta aceita", subtitulo: "o que a 99 mostrou antes do aceite") {
-                VStack(spacing: 0) {
-                    LinhaMetrica("Valor ofertado", c.valorOfertaCent.map { Formato.reais(Double($0) / 100) } ?? "—")
-                    Divisoria()
-                    LinhaMetrica("Até o passageiro", c.buscaM.map { Formato.km(Double($0) / 1000) } ?? "—")
-                    Divisoria()
-                    LinhaMetrica("Viagem", c.viagemM.map { Formato.km(Double($0) / 1000) } ?? "—")
-                    if let n = c.nota {
-                        Divisoria()
-                        LinhaMetrica("Nota do passageiro", "★ " + Formato.nota(n))
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption.weight(.bold))
+                            .padding(8)
+                            .background(.ultraThinMaterial, in: Circle())
+                            .padding(10)
                     }
-                }
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Abrir no mapa")
         }
     }
 
-    private var detalhesTecnicos: some View {
-        DisclosureGroup(isExpanded: $tecnico) {
+    private func etapa(_ titulo: String, _ quando: Date?, cor: Color, ultima: Bool) -> some View {
+        HStack(alignment: .top, spacing: Espaco.m) {
             VStack(spacing: 0) {
-                LinhaMetrica("Confiança", c.confianca?.nome ?? "aberta")
-                Divisoria()
-                LinhaMetrica("Oferta ↔ aceite", c.ligacao.nome)
-                Divisoria()
-                LinhaMetrica("Valor lido na tela de fim", c.valorFinalCent.map { Formato.reais(Double($0) / 100) } ?? "não visto")
-                Divisoria()
-                LinhaMetrica("Encerrada", c.encerradaEm.map { $0.formatted(date: .omitted, time: .standard) } ?? "—")
-                Divisoria()
-                LinhaMetrica("Região do embarque", c.regiaoOrigem.map(NomesRegioes.shared.rotulo) ?? "sem GPS")
-                Divisoria()
-                LinhaMetrica("Região do desembarque", c.regiaoDestino.map(NomesRegioes.shared.rotulo) ?? "sem GPS/tela de fim")
-                Divisoria()
-                LinhaMetrica("Número da corrida", "#\(c.id)")
-                if c.motivo != .nenhum {
-                    Text(c.motivo.texto(extra: c.falta))
-                        .font(Tipo.legenda)
-                        .foregroundStyle(Tema.textoSecundario)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.top, Espaco.s)
+                Circle()
+                    .fill(quando == nil ? Tema.linha : cor)
+                    .frame(width: 10, height: 10)
+                    .padding(.top, 4)
+                if !ultima {
+                    Rectangle().fill(Tema.linha).frame(width: 2).frame(maxHeight: .infinity)
                 }
             }
-            .padding(.top, Espaco.s)
-        } label: {
-            RotuloSecao("Detalhes técnicos")
+            .frame(width: 12)
+            Text(titulo)
+                .font(Tipo.apoio)
+                .foregroundStyle(quando == nil ? Tema.textoTerciario : Tema.texto)
+            Spacer()
+            Text(quando.map(Datas.hora) ?? "—")
+                .font(Tipo.apoio.monospacedDigit())
+                .foregroundStyle(Tema.textoSecundario)
         }
-        .tint(Tema.textoSecundario)
+        .frame(minHeight: 40, alignment: .top)
     }
 }

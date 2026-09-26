@@ -38,7 +38,6 @@ struct CorridaAnalisada: Identifiable {
         }
     }
     var porKm: Medida { Medida.dividir(valor, kmGPS, nota: "R$/km pelo GPS da corrida") }
-    var porHora: Medida { Medida.dividir(valor, duracao, fator: 3600, nota: "R$/h a bordo → fim") }
     var regiaoOrigem: String? { origem?.regiao }
     var regiaoDestino: String? { destino?.regiao }
 }

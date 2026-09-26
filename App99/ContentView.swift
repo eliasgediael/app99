@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// Abas do app. Guardadas num objeto só pra, nas próximas fases, uma tela poder abrir outra aba.
 enum Aba: Hashable { case turno, viagens, mapa, atividade, analises }
 
 /// O que o Mapa deve mostrar quando outra tela manda abrir (corrida → mapa, hora → mapa).
@@ -49,7 +48,7 @@ struct ContentView: View {
             NavigationStack {
                 ViagensView().botaoPerfil(nav)
             }
-            .tabItem { Label("Viagens", systemImage: "list.bullet") }
+            .tabItem { Label("Viagens", systemImage: "list.bullet.rectangle.portrait") }
             .tag(Aba.viagens)
 
             NavigationStack {
@@ -65,16 +64,18 @@ struct ContentView: View {
             .tag(Aba.atividade)
 
             NavigationStack {
-                HistoricoView(titulo: "Análises").botaoPerfil(nav)
+                AnalisesView().botaoPerfil(nav)
             }
-            .tabItem { Label("Análises", systemImage: "chart.bar") }
+            .tabItem { Label("Análises", systemImage: "chart.bar.xaxis") }
             .tag(Aba.analises)
         }
+        .tint(Tema.primaria)
         .sheet(isPresented: $nav.perfilAberto) {
             NavigationStack { PerfilView(monitor: monitor, relatorio: relatorio) }
         }
         .task {
             if TurnoStore.shared.atual != nil { Localizacao.shared.ligar() }   // reabriu com turno ativo
+            Reprocessamento.executarSeNecessario()
             relatorio.pedir()
             linha.pedir()
             await Notificador.pedirPermissao()
@@ -96,7 +97,6 @@ struct ContentView: View {
 }
 
 extension View {
-    /// Ícone do Perfil no canto superior direito de cada aba.
     func botaoPerfil(_ nav: Navegacao) -> some View {
         toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
