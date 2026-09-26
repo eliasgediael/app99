@@ -31,6 +31,9 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Pasta de dados visível no app Arquivos e no iTunes (backup e análise dos turnos)
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         # audio: o atalho "Analisar corrida 99" fala com o app em segundo plano
         # location: GPS do turno continua com o app fechado (só durante o turno)
         UIBackgroundModes:
