@@ -4,7 +4,7 @@ import MapKit
 // MARK: - Filtros
 
 enum FiltroMapa: String, CaseIterable, Identifiable {
-    case todas, corridas, busca, semCorrida, ofertas, abastecimento
+    case todas, corridas, ofertas, semCorrida, busca, abastecimento
     var id: Self { self }
 
     var nome: String {

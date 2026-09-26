@@ -68,7 +68,7 @@ struct ContentView: View {
             .tabItem { Label("Análises", systemImage: "chart.bar.fill") }
             .tag(Aba.analises)
         }
-        .tint(Tema.positivo)
+        .tint(Tema.mapaSemCorrida)
         .preferredColorScheme(.dark)
         .sheet(isPresented: $nav.perfilAberto) {
             NavigationStack { PerfilView(monitor: monitor, relatorio: relatorio) }

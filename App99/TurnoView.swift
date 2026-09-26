@@ -122,7 +122,8 @@ struct PainelTurno: View {
             VStack(spacing: Espaco.xl) {
                 Pilula(texto: (t.pausadoAgora ? "TURNO PAUSADO" : "TURNO ATIVO") + " • " + Self.duracaoLonga(r.duracao.valor ?? 0),
                        cor: t.pausadoAgora ? Tema.atencao : Tema.positivo,
-                       fundo: (t.pausadoAgora ? Tema.atencao : Tema.positivo).opacity(0.14))
+                       fundo: (t.pausadoAgora ? Tema.atencao : Tema.positivo).opacity(0.14),
+                       ponto: true, contorno: (t.pausadoAgora ? Tema.atencao : Tema.positivo).opacity(0.5))
 
                 VStack(spacing: 6) {
                     Text(comLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")

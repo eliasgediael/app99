@@ -150,7 +150,11 @@ struct LinhaViagem: View {
                 }
             }
         }
-        .padding(.bottom, ultima ? 0 : Espaco.l)
+        .padding(.bottom, ultima ? 0 : Espaco.m)
+        .overlay(alignment: .bottom) {
+            if !ultima { Divisoria().padding(.leading, 22) }
+        }
+        .padding(.bottom, ultima ? 0 : Espaco.m)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }

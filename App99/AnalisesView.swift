@@ -59,7 +59,7 @@ struct AnalisesView: View {
                 Text(Formato.reais(a.confirmado))
                     .font(Tipo.destaque)
                     .monospacedDigit()
-                    .foregroundStyle(Tema.texto)
+                    .foregroundStyle(Tema.positivo)
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                 // Só compara quando o período anterior tem turnos e faturamento
@@ -81,7 +81,7 @@ struct AnalisesView: View {
                     Text("Custos").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text("− " + Formato.reais(a.custosRegistrados)).font(Tipo.valor).monospacedDigit().foregroundStyle(Tema.texto)
+                        Text("− " + Formato.reais(a.custosRegistrados)).font(Tipo.valor).monospacedDigit().foregroundStyle(Tema.erro)
                         Text(a.combustivel == a.custosRegistrados ? "Combustível" : "Combustível e outros")
                             .font(Tipo.legenda).foregroundStyle(Tema.textoTerciario)
                     }
@@ -92,7 +92,7 @@ struct AnalisesView: View {
                     Text("Resultado líquido").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
                     Spacer()
                     Text("= " + Formato.reais(a.confirmado - a.custosRegistrados))
-                        .font(Tipo.valor).monospacedDigit().foregroundStyle(Tema.texto)
+                        .font(Tipo.valor).monospacedDigit().foregroundStyle(Tema.positivo)
                 }
                 .padding(.top, Espaco.m)
             }

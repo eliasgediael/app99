@@ -20,7 +20,7 @@ enum Tema {
     static let primaria         = Color(claro: 0x15627C, escuro: 0x2B8FB3)
     static let positivo         = Color(claro: 0x0E9F6E, escuro: 0x10B981)
     static let atencao          = Color(claro: 0xB7801B, escuro: 0xF2B84B)
-    static let erro             = Color(claro: 0xC43C3C, escuro: 0xEF5B5B)
+    static let erro             = Color(claro: 0xC43C3C, escuro: 0xEF4444)
     static let neutro           = Color(claro: 0x64748B, escuro: 0x64748B)
 
     static let mapaEmCorrida    = positivo
@@ -449,18 +449,23 @@ struct Pilula: View {
     let texto: String
     var cor: Color = Tema.texto
     var fundo: Color = Tema.superficie
+    var ponto = false
+    var contorno: Color = Tema.linha
 
     var body: some View {
-        Text(texto)
-            .font(Tipo.legenda.weight(.semibold))
-            .monospacedDigit()
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(fundo, in: Capsule())
-            .overlay(Capsule().stroke(Tema.linha, lineWidth: 1))
-            .foregroundStyle(cor)
-            .fixedSize()
+        HStack(spacing: 6) {
+            if ponto { Circle().fill(cor).frame(width: 7, height: 7) }
+            Text(texto)
+                .font(Tipo.legenda.weight(.semibold))
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(fundo, in: Capsule())
+        .overlay(Capsule().stroke(contorno, lineWidth: 1))
+        .foregroundStyle(cor)
+        .fixedSize()
     }
 }
 
