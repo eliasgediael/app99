@@ -206,6 +206,8 @@ struct ResumoTurno {
     }
 
     var corridasConfirmadas: Int { corridas.filter { $0.confianca == .confirmado }.count }
+    /// Corridas que aconteceram (confirmadas + estimadas). Canceladas/sem evidência ficam de fora.
+    var corridasFeitas: Int { corridas.filter { $0.confianca == .confirmado || $0.confianca == .estimado }.count }
     var corridasEstimadas: Int { corridas.filter { $0.confianca == .estimado }.count }
     var corridasIndeterminadas: Int { corridas.filter { $0.confianca == .indeterminado }.count }
 }

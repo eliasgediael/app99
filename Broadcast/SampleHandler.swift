@@ -212,7 +212,7 @@ class SampleHandler: RPBroadcastSampleHandler {
         SinalExtensao.leitura.enviar()
         let agora = Date()
 
-        if let oferta = try? ParserOferta99.extrair(de: linhas) {
+        if let oferta = try? ParserOferta99.extrair(de: linhas), MotorCorrida.plausivel(oferta) {
             SinalExtensao.oferta.enviar()
             // Todo frame vai pro motor (ele precisa ver a oferta 2x pra valer). Print de teste não conta.
             if !modoTeste { motor.observar(.oferta(oferta), em: agora) }

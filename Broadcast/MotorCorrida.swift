@@ -30,7 +30,13 @@ enum TelaLida {
 /// - Oferta na tela / saindo da tela nunca vira corrida nem faturamento.
 /// - Aceite só é ligado a uma oferta se a tela de aceite vier até 60 s depois de ela sair
 ///   da tela e nenhuma outra oferta tiver sido lida no meio. Na dúvida: sem valor.
+/// - Durante uma corrida, a 99 mostra "cancelou" logo depois de cada oferta que você NÃO aceita.
+///   Por isso: "cancelou" até 8 s depois de uma oferta sair vale pra oferta, nunca pra sua corrida;
+///   e a oferta que sai SEM esse aviso com corrida em andamento foi aceita (vai pra fila da próxima).
+/// - A 99 só mostra a tela de aceite da próxima corrida depois de você finalizar a atual:
+///   aceite novo com corrida em andamento ⇒ a anterior terminou (inferência marcada).
 /// - CONFIRMADA = aceite + valor + passageiro a bordo + tela de fim. Só ela soma no faturamento.
+///   (A tela de fim implica passageiro a bordo.)
 /// - ESTIMADA = aceite + valor + (a bordo OU fim). Soma separado.
 /// - Resto = INDETERMINADA (R$ 0).
 /// - Toda tela precisa ser lida 2 vezes em até 3 s pra valer (evita erro de OCR de um frame só).
@@ -59,6 +65,7 @@ final class MotorCorrida {
         let chave: String
         let primeiraVez: Date
         var saiuEm: Date?
+        var cancelada = false   // "cancelou" logo depois de sair: não foi aceita
     }
 
     private let diario: Diario
@@ -69,17 +76,26 @@ final class MotorCorrida {
     private var ultimaOferta: OfertaVista?
     private var chavesAlheias: Set<String> = []           // ofertas lidas depois da última confirmada
     private var registradasEm: [String: (em: Date, id: Int)] = [:]   // não repetir OFERTA_DETECTADA por 20 s
+    /// Ofertas aceitas durante a corrida em andamento (saíram da tela sem "cancelou"), na ordem.
+    private var fila: [OfertaVista] = []
 
     private var classeAtual = "outra"
     private var candidata: (classe: String, tela: TelaLida, primeira: Date)?
 
     private let janelaDebounce: TimeInterval = 3
     private let janelaAceite: TimeInterval = 60
-    private let janelaAceiteConfirmado: TimeInterval = 10
+    private let janelaAceiteConfirmado: TimeInterval = 30
+    private let janelaCancelOferta: TimeInterval = 8
+    private let validadeFila: TimeInterval = 30 * 60
     private let limiteCorridaAberta: TimeInterval = 3 * 3600
 
     init(diario: Diario) {
         self.diario = diario
+    }
+
+    /// Oferta que faz sentido. Leituras erradas da tela de busca viram "ofertas" de R$ 8 com 1 m de viagem.
+    static func plausivel(_ o: OfertaCorrida) -> Bool {
+        o.valor >= 3 && o.kmViagem >= 0.3
     }
 
     static func chave(_ o: OfertaCorrida) -> String {
@@ -90,6 +106,8 @@ final class MotorCorrida {
 
     func observar(_ tela: TelaLida, em agora: Date = Date()) {
         encerrarVelhas(agora)
+        var tela = tela
+        if case .oferta(let o) = tela, !Self.plausivel(o) { tela = .outra }
 
         // Qualquer oferta lida, mesmo num frame só, conta pra ambiguidade do aceite
         if case .oferta(let o) = tela {
@@ -120,6 +138,7 @@ final class MotorCorrida {
         candidata = nil
         ultimaOferta = nil
         chavesAlheias = []
+        fila = []
     }
 
     /// Usuário zerou o dia: esquece o que estava em andamento.
@@ -127,6 +146,7 @@ final class MotorCorrida {
         abertas.removeAll()
         ultimaOferta = nil
         chavesAlheias = []
+        fila = []
     }
 
     // MARK: Transições
@@ -138,8 +158,14 @@ final class MotorCorrida {
             ultimaOferta = ov
             switch tela {
             case .aCaminho, .embarque: break   // o aceite registra
+            case .oferta, .cancelada:
+                // Trocou direto por outra oferta, ou veio "cancelou": não foi aceita
+                evento(.ofertaSaiuDaTela, .tela, em: agora, motivo: .ofertaSaiuSemAceite, oferta: ov.oferta, ofertaId: ov.id)
             default:
                 evento(.ofertaSaiuDaTela, .tela, em: agora, motivo: .ofertaSaiuSemAceite, oferta: ov.oferta, ofertaId: ov.id)
+                // Com corrida em andamento, oferta que sai sem "cancelou" foi aceita pra depois.
+                // Se o "cancelou" vier nos próximos segundos, sai da fila.
+                if !abertas.isEmpty || !fila.isEmpty { fila.append(ov) }
             }
         }
 
@@ -176,35 +202,46 @@ final class MotorCorrida {
     }
 
     private func telaDeAceite(embarque: Bool, em agora: Date) {
-        // Corrida já aceita e ainda sem passageiro: é a mesma, a menos que uma oferta nova tenha
-        // aparecido depois da última tela dela (aí foi outro aceite)
+        // Corrida já aceita e ainda sem passageiro: é a mesma (ofertas vistas na busca não trocam a corrida)
         if let i = abertas.lastIndex(where: { $0.estado == .aceita || $0.estado == .aCaminho }) {
-            let ofertaNova = ultimaOferta.map { $0.primeiraVez > abertas[i].ultimaTela } ?? false
-            if !ofertaNova {
-                abertas[i].ultimaTela = agora
-                if embarque && !abertas[i].chegouEmbarque {
-                    abertas[i].chegouEmbarque = true
-                    evento(.telaEmbarque, .tela, em: agora, corrida: abertas[i].id, motivo: .mesmaCorridaNaTela)
-                }
-                return
+            abertas[i].ultimaTela = agora
+            if embarque && !abertas[i].chegouEmbarque {
+                abertas[i].chegouEmbarque = true
+                evento(.telaEmbarque, .tela, em: agora, corrida: abertas[i].id, motivo: .mesmaCorridaNaTela)
             }
-            let velha = abertas.remove(at: i)
-            encerrar(velha, em: agora, porque: .substituidaPorNovoAceite)
+            return
         }
 
-        // Novo aceite: tenta ligar à oferta
+        // A 99 só mostra o aceite da próxima depois de finalizar a atual: a que estava em andamento acabou
+        let emAndamento = abertas.filter { $0.estado == .emCorrida }
+        abertas.removeAll { $0.estado == .emCorrida }
+        for var c in emAndamento {
+            c.fim = true
+            evento(.transicao, .inferencia, em: agora, corrida: c.id, de: c.estado, para: .fimDetectado,
+                   motivo: .fimInferidoPorNovoAceite)
+            c.estado = .fimDetectado
+            encerrar(c, em: agora, porque: nil)
+        }
+
+        // Novo aceite: primeiro a oferta aceita durante a corrida anterior; senão a que acabou de sair da tela
         var ligada: OfertaVista?
         var confirmada = false
         var motivo = MotivoEvento.aceiteSemOferta
-        var segundos = 0
-        if let ov = ultimaOferta {
+        var extra = 0
+        if !fila.isEmpty {
+            extra = fila.count
+            ligada = fila.removeFirst()
+            confirmada = extra == 1
+            motivo = .ofertaAceitaDuranteCorrida
+        } else if let ov = ultimaOferta, !ov.cancelada {
             let saiu = ov.saiuEm ?? agora
-            segundos = Int(agora.timeIntervalSince(saiu))
-            if agora.timeIntervalSince(saiu) <= janelaAceite {
+            let segundos = agora.timeIntervalSince(saiu)
+            if segundos <= janelaAceite {
                 if chavesAlheias.isEmpty {
                     ligada = ov
-                    confirmada = agora.timeIntervalSince(saiu) <= janelaAceiteConfirmado
+                    confirmada = segundos <= janelaAceiteConfirmado
                     motivo = confirmada ? .ofertaLigadaAoAceite : .ofertaLigadaFraca
+                    extra = Int(segundos)
                 } else {
                     motivo = .aceiteOfertaAmbigua
                 }
@@ -213,20 +250,38 @@ final class MotorCorrida {
         ultimaOferta = nil
         chavesAlheias = []
 
+        let id = novaCorrida(ligada, confirmada: confirmada, motivo: motivo, extra: extra, origem: .tela, em: agora)
+        if embarque, let i = abertas.lastIndex(where: { $0.id == id }) {
+            abertas[i].chegouEmbarque = true
+            evento(.telaEmbarque, .tela, em: agora, corrida: id, motivo: .lidoNaTela)
+        }
+        SinalExtensao.corridaAceita.enviar()
+    }
+
+    /// Abre uma corrida aceita (vista na tela ou inferida) e registra o aceite na linha do tempo.
+    @discardableResult
+    private func novaCorrida(_ ligada: OfertaVista?, confirmada: Bool, motivo: MotivoEvento, extra: Int,
+                             origem: OrigemEvento, em agora: Date) -> Int {
         let id = diario.novoIdCorrida()
         var c = Corrida(id: id, estado: .aceita, criadaEm: agora, ultimaTela: agora, oferta: ligada?.oferta,
                         ofertaId: ligada?.id ?? 0, ligacaoConfirmada: confirmada, aceite: true)
-        evento(.aceiteDetectado, .tela, em: agora, corrida: id, para: .aceita,
+        evento(.aceiteDetectado, origem, em: agora, corrida: id, para: .aceita,
                confianca: ligada == nil ? .indeterminado : (confirmada ? .confirmado : .estimado),
-               motivo: motivo, extra: ligada != nil ? segundos : 0, oferta: ligada?.oferta, ofertaId: ligada?.id ?? 0)
-        evento(.transicao, .tela, em: agora, corrida: id, de: .aceita, para: .aCaminho, motivo: .lidoNaTela)
+               motivo: motivo, extra: extra, oferta: ligada?.oferta, ofertaId: ligada?.id ?? 0)
+        evento(.transicao, origem, em: agora, corrida: id, de: .aceita, para: .aCaminho,
+               motivo: origem == .tela ? .lidoNaTela : .aceiteInferidoPeloFim)
         c.estado = .aCaminho
-        if embarque {
-            c.chegouEmbarque = true
-            evento(.telaEmbarque, .tela, em: agora, corrida: id, motivo: .lidoNaTela)
-        }
         abertas.append(c)
-        SinalExtensao.corridaAceita.enviar()
+        return id
+    }
+
+    /// Corrida aceita durante a anterior cuja tela de aceite não foi vista: abre a partir da fila.
+    private func abrirDaFila(em agora: Date) -> Bool {
+        guard !fila.isEmpty else { return false }
+        let n = fila.count
+        let ov = fila.removeFirst()
+        novaCorrida(ov, confirmada: n == 1, motivo: .aceiteInferidoPeloFim, extra: n, origem: .inferencia, em: agora)
+        return true
     }
 
     private func passageiroABordo(em agora: Date) {
@@ -246,6 +301,11 @@ final class MotorCorrida {
             abertas[i].ultimaTela = agora   // mesma corrida voltando pra tela
             return
         }
+        // Aceite não visto, mas havia oferta aceita durante a corrida anterior
+        if abrirDaFila(em: agora) {
+            passageiroABordo(em: agora)
+            return
+        }
         // A bordo sem aceite: registra, mas nunca vai ter valor confirmado
         let id = diario.novoIdCorrida()
         var c = Corrida(id: id, estado: .passageiroABordo, criadaEm: agora, ultimaTela: agora, oferta: nil, aceite: false)
@@ -261,6 +321,10 @@ final class MotorCorrida {
         let i = abertas.firstIndex(where: { $0.estado == .emCorrida })
             ?? abertas.lastIndex(where: { $0.estado == .aceita || $0.estado == .aCaminho })
         guard let i else {
+            if abrirDaFila(em: agora) {
+                fimDeCorrida(valorCent: valorCent, em: agora)
+                return
+            }
             evento(.fimDetectado, .tela, em: agora, motivo: .fimSemCorridaAberta, valorCent: valorCent ?? 0)
             return
         }
@@ -275,6 +339,15 @@ final class MotorCorrida {
     }
 
     private func cancelamento(em agora: Date) {
+        // "cancelou" logo depois de uma oferta sair da tela: é a oferta (não aceita), não a sua corrida
+        if let ov = ultimaOferta, let saiu = ov.saiuEm, !ov.cancelada,
+           agora.timeIntervalSince(saiu) <= janelaCancelOferta {
+            ultimaOferta?.cancelada = true
+            fila.removeAll { $0.id == ov.id }
+            evento(.cancelamentoDetectado, .tela, em: agora, motivo: .ofertaCanceladaNaTela,
+                   oferta: ov.oferta, ofertaId: ov.id)
+            return
+        }
         guard let i = abertas.lastIndex(where: { $0.estado == .aceita || $0.estado == .aCaminho }) else {
             evento(.cancelamentoDetectado, .tela, em: agora, motivo: .cancelamentoSemCorrida)
             return
@@ -287,6 +360,7 @@ final class MotorCorrida {
 
     private func encerrarVelhas(_ agora: Date) {
         let velhas = abertas.filter { agora.timeIntervalSince($0.criadaEm) > limiteCorridaAberta }
+        fila.removeAll { agora.timeIntervalSince($0.saiuEm ?? $0.primeiraVez) > validadeFila }
         guard !velhas.isEmpty else { return }
         abertas.removeAll { agora.timeIntervalSince($0.criadaEm) > limiteCorridaAberta }
         for c in velhas { encerrar(c, em: agora, porque: .tempoEsgotado) }
@@ -304,7 +378,7 @@ final class MotorCorrida {
         if !c.aceite { falta |= Falta.aceite }
         if valorCent == nil { falta |= Falta.valor }
         else if !valorConfirmado { falta |= Falta.ligacao }
-        if !c.aBordo { falta |= Falta.aBordo }
+        if !c.aBordo && !c.fim { falta |= Falta.aBordo }   // tela de fim implica passageiro a bordo
         if !c.fim { falta |= Falta.fim }
 
         let final: EstadoCorrida

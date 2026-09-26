@@ -54,7 +54,7 @@ struct ResumoTurnoView: View {
                 Rotulo("Tempo", "clock", Duracao.curta(r.duracao.valor ?? 0))
             }
             NavigationLink { CorridasView(r: r) } label: {
-                Rotulo("Corridas", "figure.wave", "\(r.corridasConfirmadas)" + (r.corridas.count > r.corridasConfirmadas ? " de \(r.corridas.count)" : ""))
+                Rotulo("Corridas", "figure.wave", "\(r.corridasFeitas)" + (r.corridasEstimadas > 0 ? " · \(r.corridasEstimadas) ≈" : ""))
             }
             NavigationLink { OfertasView(r: r) } label: {
                 Rotulo("Ofertas", "tag", "\(r.ofertas.count)")

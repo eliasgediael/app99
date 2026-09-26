@@ -94,7 +94,7 @@ struct PainelTurno: View {
                 Etiqueta(texto: (r.segmentos.last?.estado ?? .semLeitura).nome.uppercased(),
                          cor: corEstado(r.segmentos.last?.estado ?? .semLeitura))
                 Spacer()
-                Text("\(r.corridasConfirmadas) corridas · \(Duracao.curta(r.tempoPorEstado[.aguardando] ?? 0)) aguardando")
+                Text("\(r.corridasFeitas) corridas · \(Duracao.curta(r.tempoPorEstado[.aguardando] ?? 0)) aguardando")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -13,6 +13,7 @@ struct ResumoAgregado {
     var estimado: Double { resumos.reduce(0) { $0 + ($1.faturamentoEstimado.valor ?? 0) } }
     var custosRegistrados: Double { resumos.reduce(0) { $0 + ($1.combustivel.valor ?? 0) + ($1.outrosCustos.valor ?? 0) } }
     var corridasConfirmadas: Int { resumos.reduce(0) { $0 + $1.corridasConfirmadas } }
+    var corridasFeitas: Int { resumos.reduce(0) { $0 + $1.corridasFeitas } }
     var corridasEstimadas: Int { resumos.reduce(0) { $0 + $1.corridasEstimadas } }
     var ofertas: Int { resumos.reduce(0) { $0 + $1.ofertas.count } }
     var ofertasAceitas: Int { resumos.reduce(0) { $0 + $1.ofertas.filter { $0.resultado == .aceita }.count } }
@@ -154,7 +155,7 @@ struct HistoricoView: View {
             Campo("R$/km", a.porKm) { Formato.reais($0) }
             Campo("Distância", a.km) { Formato.km($0) }
             LabeledContent("Tempo de turno", value: Duracao.curta(a.duracao))
-            LabeledContent("Corridas confirmadas", value: "\(a.corridasConfirmadas)")
+            LabeledContent("Corridas", value: "\(a.corridasFeitas)" + (a.corridasEstimadas > 0 ? " (\(a.corridasEstimadas) ≈)" : ""))
             LabeledContent("Ofertas aceitas", value: "\(a.ofertasAceitas) de \(a.ofertas)")
             LabeledContent("Turnos", value: "\(a.turnos)")
         }
@@ -280,7 +281,7 @@ struct HistoricoCurto: View {
         return LabeledContent(p.nome) {
             VStack(alignment: .trailing, spacing: 1) {
                 Text(Formato.reais(a.confirmado)).monospacedDigit().bold()
-                Text("\(a.corridasConfirmadas) corridas" + (a.porHora.valor.map { " · " + Formato.reais($0) + "/h" } ?? ""))
+                Text("\(a.corridasFeitas) corridas" + (a.porHora.valor.map { " · " + Formato.reais($0) + "/h" } ?? ""))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

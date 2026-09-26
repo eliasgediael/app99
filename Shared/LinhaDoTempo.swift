@@ -140,6 +140,10 @@ enum MotivoEvento: Int, Codable {
     case mesmaCorridaNaTela = 18
     case ofertaLigadaFraca = 19         // extra = segundos (10 a 60 s): associação só ESTIMADA
     case registradoPeloUsuario = 20
+    case ofertaCanceladaNaTela = 21     // "cancelou" logo depois de uma oferta sair: é a oferta, não a corrida
+    case ofertaAceitaDuranteCorrida = 22 // oferta saiu sem "cancelou" com corrida em andamento; extra = ofertas na fila
+    case fimInferidoPorNovoAceite = 23  // tela de aceite de outra corrida ⇒ a anterior acabou
+    case aceiteInferidoPeloFim = 24     // fim/embarque de uma corrida aceita durante a anterior
 
     func texto(extra: Int) -> String {
         switch self {
@@ -162,8 +166,14 @@ enum MotivoEvento: Int, Codable {
         case .zeradoPeloUsuario:        return "Números de hoje apagados pelo usuário."
         case .cancelamentoSemCorrida:   return "Cancelamento sem corrida aceita aberta."
         case .mesmaCorridaNaTela:       return "Tela da corrida que já estava aberta."
-        case .ofertaLigadaFraca:        return "Aceite veio \(extra) s depois desta oferta sair da tela: associação só ESTIMADA (confirmada é até 10 s)."
+        case .ofertaLigadaFraca:        return "Aceite veio \(extra) s depois desta oferta sair da tela: associação só ESTIMADA (confirmada é até 30 s)."
         case .registradoPeloUsuario:    return "Registrado por você."
+        case .ofertaCanceladaNaTela:    return "Aviso de cancelamento logo depois desta oferta sair: vale pra oferta, não pra sua corrida."
+        case .ofertaAceitaDuranteCorrida:
+            return extra > 1 ? "Oferta aceita durante a corrida anterior, mas havia \(extra) na fila: associação só ESTIMADA."
+                             : "Oferta aceita durante a corrida anterior (saiu da tela sem aviso de cancelamento)."
+        case .fimInferidoPorNovoAceite: return "Inferido: a tela de aceite da próxima corrida apareceu ⇒ esta terminou."
+        case .aceiteInferidoPeloFim:    return "Inferido: corrida aceita durante a anterior; a tela de aceite não foi vista."
         }
     }
 }
