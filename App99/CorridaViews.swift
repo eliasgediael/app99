@@ -211,10 +211,23 @@ struct CorridaDetalheView: View {
         }
     }
 
-    /// Mapa da corrida (entra na Fase 5).
+    /// Mapa só desta corrida (busca + viagem) e atalho pro mapa do turno.
     @ViewBuilder
     private var mapa: some View {
-        EmptyView()
+        if let r, r.temGPS, !c.cancelada, c.origem != nil || c.destino != nil || c.kmGPS.valor != nil {
+            VStack(alignment: .leading, spacing: Espaco.s) {
+                MapaTurnoView(r: r, corridaFoco: c.id, interativo: false)
+                    .frame(height: 200)
+                    .clipShape(RoundedRectangle(cornerRadius: Raio.bloco))
+                Button {
+                    Navegacao.shared.abrirMapa(turno: r.turno.id, corrida: c.id)
+                } label: {
+                    Label("Ver no mapa do turno", systemImage: "map")
+                        .font(Tipo.apoio.weight(.semibold))
+                        .foregroundStyle(Tema.primaria)
+                }
+            }
+        }
     }
 
     private var etapas: some View {

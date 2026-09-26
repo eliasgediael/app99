@@ -1,5 +1,4 @@
 import SwiftUI
-import MapKit
 
 /// Resumo de um turno: primeiro quanto rendeu, depois o ritmo e o tempo; cada parte abre numa tela própria.
 struct ResumoTurnoView: View {
@@ -104,7 +103,7 @@ struct ResumoTurnoView: View {
             }
             if r.temGPS {
                 Divisoria()
-                NavigationLink { MapaTurnoView(r: r).ignoresSafeArea(edges: .bottom).navigationTitle("Mapa") } label: {
+                Button { Navegacao.shared.abrirMapa(turno: turno.id) } label: {
                     LinhaNavegacao("Mapa", "map", r.km.valor.map(Formato.km) ?? "")
                 }
             }
@@ -310,87 +309,5 @@ private struct CustosView: View {
         }
         .navigationTitle("Abastecimentos e custos")
         .sheet(isPresented: $novo) { NavigationStack { AbastecimentoView() } }
-    }
-}
-
-// MARK: - Mapa
-
-/// Trajeto colorido por estado (verde = em corrida, azul = indo buscar, cinza = sem corrida).
-/// Trechos sem sinal não aparecem ligados. Pontos: embarques (verde) e fins de corrida (vermelho).
-struct MapaTurnoView: UIViewRepresentable {
-    let r: ResumoTurno
-
-    func makeUIView(context: Context) -> MKMapView {
-        let mapa = MKMapView()
-        mapa.delegate = context.coordinator
-        mapa.pointOfInterestFilter = .excludingAll
-        return mapa
-    }
-
-    func updateUIView(_ mapa: MKMapView, context: Context) {
-        mapa.removeOverlays(mapa.overlays)
-        mapa.removeAnnotations(mapa.annotations)
-
-        // Junta trechos seguidos do mesmo estado numa linha só
-        var grupos: [(estado: EstadoMotorista, pontos: [CLLocationCoordinate2D])] = []
-        for t in r.trajeto.trechos {
-            let estado = r.segmentos.first { $0.inicio <= t.meio && t.meio < $0.fim }?.estado ?? .semLeitura
-            let de = CLLocationCoordinate2D(latitude: t.de.coord.lat, longitude: t.de.coord.lon)
-            let para = CLLocationCoordinate2D(latitude: t.para.coord.lat, longitude: t.para.coord.lon)
-            if let u = grupos.last, u.estado == estado, let fim = u.pontos.last,
-               fim.latitude == de.latitude, fim.longitude == de.longitude {
-                grupos[grupos.count - 1].pontos.append(para)
-            } else {
-                grupos.append((estado, [de, para]))
-            }
-        }
-        for g in grupos {
-            let linha = MKPolyline(coordinates: g.pontos, count: g.pontos.count)
-            linha.title = g.estado.rawValue
-            mapa.addOverlay(linha)
-        }
-
-        for c in r.corridas {
-            if let o = c.origem { mapa.addAnnotation(Marca(o, "Embarque #\(c.id)", .systemGreen)) }
-            if let d = c.destino { mapa.addAnnotation(Marca(d, "Fim #\(c.id)", .systemRed)) }
-        }
-
-        if let primeiro = mapa.overlays.first {
-            let area = mapa.overlays.dropFirst().reduce(primeiro.boundingMapRect) { $0.union($1.boundingMapRect) }
-            mapa.setVisibleMapRect(area, edgePadding: UIEdgeInsets(top: 40, left: 40, bottom: 40, right: 40), animated: false)
-        }
-    }
-
-    func makeCoordinator() -> Coordenador { Coordenador() }
-
-    final class Marca: NSObject, MKAnnotation {
-        let coordinate: CLLocationCoordinate2D
-        let title: String?
-        let cor: UIColor
-        init(_ c: Coordenada, _ titulo: String, _ cor: UIColor) {
-            coordinate = CLLocationCoordinate2D(latitude: c.lat, longitude: c.lon)
-            title = titulo
-            self.cor = cor
-        }
-    }
-
-    final class Coordenador: NSObject, MKMapViewDelegate {
-        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
-            let r = MKPolylineRenderer(overlay: overlay)
-            switch EstadoMotorista(rawValue: overlay.title.flatMap { $0 } ?? "") {
-            case .emCorrida?: r.strokeColor = .systemGreen
-            case .aCaminho?:  r.strokeColor = .systemBlue
-            default:          r.strokeColor = .systemGray
-            }
-            r.lineWidth = 4
-            return r
-        }
-
-        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
-            guard let m = annotation as? Marca else { return nil }
-            let v = MKMarkerAnnotationView(annotation: m, reuseIdentifier: nil)
-            v.markerTintColor = m.cor
-            return v
-        }
     }
 }
