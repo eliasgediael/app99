@@ -122,6 +122,20 @@ final class TurnoStore: ObservableObject {
         LinhaDoTempoStore.shared.adicionarLocal(e)
     }
 
+    /// Apaga os trajetos dos turnos encerrados (Perfil → Dados). Devolve quantos arquivos saíram.
+    @discardableResult
+    func apagarTrajetos() -> Int {
+        var n = 0
+        for t in turnos where !t.ativo {
+            if let url = pasta?.appendingPathComponent("gps-\(t.id.uuidString).json"),
+               (try? FileManager.default.removeItem(at: url)) != nil {
+                n += 1
+            }
+        }
+        objectWillChange.send()
+        return n
+    }
+
     /// Privacidade: trajetos com mais de 90 dias são apagados (os totais do turno continuam).
     private func apagarGPSAntigo() {
         let limite = Date().addingTimeInterval(-retencaoGPS)

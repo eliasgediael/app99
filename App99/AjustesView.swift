@@ -35,6 +35,43 @@ struct AjustesView: View {
             }
 
             Section {
+                Button("Voltar aos valores padrão (moto, passageiro e voz)", role: .destructive) {
+                    custoPorKm = Self.padrao.custoPorKm
+                    minimoPorKm = Self.padrao.minimoPorKm
+                    bomPorKm = Self.padrao.bomPorKm
+                    alertaBuscaKm = Self.padrao.alertaBuscaKm
+                    notaMinima = Self.padrao.notaMinima
+                    velocidadeFala = Narrador.velocidadePadrao
+                    falarResultado = false
+                }
+            }
+        }
+        .navigationTitle("Moto e decisão")
+        .onDisappear { AjustesCompartilhados.enviar() }   // vale na hora se a leitura estiver ligada
+        .onChange(of: falarResultado) { _ in AjustesCompartilhados.enviar() }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    private func campo(_ titulo: String, valor: Binding<Double>) -> some View {
+        LabeledContent(titulo) {
+            TextField(titulo,
+                      value: valor,
+                      format: .number.precision(.fractionLength(2)).locale(Locale(identifier: "pt_BR")))
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 100)
+        }
+    }
+}
+
+/// Voz do resultado da oferta. Mesmas chaves do Narrador; manda pra leitura ao sair (como antes).
+struct VozView: View {
+    @AppStorage(Narrador.chaveVelocidade) private var velocidadeFala = Narrador.velocidadePadrao
+    @AppStorage(Narrador.chaveFalar) private var falarResultado = false
+
+    var body: some View {
+        Form {
+            Section {
                 Toggle("Falar resultado", isOn: $falarResultado)
                 VStack(alignment: .leading) {
                     Text("Velocidade: \(rotuloVelocidade)")
@@ -57,22 +94,10 @@ struct AjustesView: View {
                 Text("Desligado: só a notificação, sem mexer na sua música.")
             }
 
-            Section {
-                Button("Voltar aos valores padrão", role: .destructive) {
-                    custoPorKm = Self.padrao.custoPorKm
-                    minimoPorKm = Self.padrao.minimoPorKm
-                    bomPorKm = Self.padrao.bomPorKm
-                    alertaBuscaKm = Self.padrao.alertaBuscaKm
-                    notaMinima = Self.padrao.notaMinima
-                    velocidadeFala = Narrador.velocidadePadrao
-                    falarResultado = false
-                }
-            }
         }
-        .navigationTitle("Ajustes")
-        .onDisappear { AjustesCompartilhados.enviar() }   // vale na hora se a leitura estiver ligada
+        .navigationTitle("Voz")
+        .onDisappear { AjustesCompartilhados.enviar() }
         .onChange(of: falarResultado) { _ in AjustesCompartilhados.enviar() }
-        .scrollDismissesKeyboard(.interactively)
     }
 
     private var rotuloVelocidade: String {
@@ -80,17 +105,6 @@ struct AjustesView: View {
         case ..<0.45: return "devagar"
         case ..<0.53: return "normal"
         default:      return "rápida"
-        }
-    }
-
-    private func campo(_ titulo: String, valor: Binding<Double>) -> some View {
-        LabeledContent(titulo) {
-            TextField(titulo,
-                      value: valor,
-                      format: .number.precision(.fractionLength(2)).locale(Locale(identifier: "pt_BR")))
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: 100)
         }
     }
 }
