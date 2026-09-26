@@ -45,11 +45,11 @@ struct MapaAbaView: View {
 
     struct CorridaAberta: Identifiable { let id: Int }
 
-    private var lista: [Turno] { turnos.turnos.sorted { $0.inicio > $1.inicio } }
+    private var lista: [Turno] { turnos.turnosComRegistro.sorted { $0.inicio > $1.inicio } }
 
     private var turno: Turno? {
         if let id = escolhido, let t = turnos.turnos.first(where: { $0.id == id }) { return t }
-        return turnos.atual ?? turnos.ultimoEncerrado
+        return turnos.atual ?? lista.first
     }
 
     var body: some View {
@@ -63,7 +63,7 @@ struct MapaAbaView: View {
                         .frame(maxHeight: .infinity)
                 }
             } else {
-                EstadoVazio(icone: "map", titulo: "Nenhum turno ainda")
+                EstadoVazio(icone: "map", titulo: "Nenhum turno registrado")
                     .frame(maxHeight: .infinity)
             }
         }
@@ -172,7 +172,7 @@ struct MapaAbaView: View {
             case .todas:
                 item("Corrida", Tema.mapaEmCorrida)
                 item("Busca", Tema.mapaIndoBuscar)
-                item("Livre", Tema.mapaSemCorrida)
+                item("Sem corrida", Tema.mapaSemCorrida)
             }
         }
         .padding(.horizontal, 12)

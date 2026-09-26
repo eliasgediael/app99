@@ -11,20 +11,25 @@ struct HoraAtividade: Identifiable {
     var id: Date { inicio }
     var confirmado = 0.0
     var estimado = 0.0
-    var corridas = 0            // confirmadas + estimadas
+    var corridas = 0            // confirmadas
     var estimadas = 0
     var metros = 0.0
     var semCorrida: TimeInterval = 0
     var tempoTurno: TimeInterval = 0
+    var comLeitura: TimeInterval = 0
     var comGPS = false
     var turno: UUID?            // turno que ocupou essa hora (pra abrir o mapa)
 
     var km: Double { metros / 1000 }
-    /// R$/h só com pelo menos 15 min de turno na hora (menos que isso distorce).
-    var porHora: Double? { tempoTurno >= 900 ? confirmado / (tempoTurno / 3600) : nil }
+    /// Faturamento ÷ tempo com a leitura ligada nessa hora (pelo menos 15 min; menos que isso distorce).
+    var porHora: Double? { comLeitura >= 900 ? confirmado / (comLeitura / 3600) : nil }
 
-    var rotulo: String {
-        String(format: "%02dh", Calendar.current.component(.hour, from: inicio))
+    var temDados: Bool { corridas + estimadas > 0 || comLeitura > 0 }
+
+    /// "22:00–23:00"
+    var intervaloTexto: String {
+        let h = Calendar.current.component(.hour, from: inicio)
+        return String(format: "%02d:00–%02d:00", h, (h + 1) % 24)
     }
 }
 
@@ -59,9 +64,13 @@ enum Horas {
             for c in r.corridas where c.confianca == .confirmado || c.confianca == .estimado {
                 guard let fim = c.terminoVisto else { continue }
                 mexer(inicioDaHora(fim)) { h in
-                    h.corridas += 1
-                    if c.confianca == .confirmado { h.confirmado += c.valor.valor ?? 0 }
-                    else { h.estimado += c.valor.valor ?? 0; h.estimadas += 1 }
+                    if c.confianca == .confirmado {
+                        h.corridas += 1
+                        h.confirmado += c.valor.valor ?? 0
+                    } else {
+                        h.estimadas += 1
+                        h.estimado += c.valor.valor ?? 0
+                    }
                 }
             }
             for t in r.trajeto.trechos {
@@ -72,12 +81,14 @@ enum Horas {
                     mexer(f.hora) { h in
                         h.tempoTurno += f.segundos
                         if s.estado == .aguardando { h.semCorrida += f.segundos }
+                        if s.estado != .semLeitura && s.estado != .pausado { h.comLeitura += f.segundos }
                         if h.turno == nil { h.turno = r.turno.id }
                     }
                 }
             }
         }
-        return g.values.filter { $0.tempoTurno > 0 || $0.corridas > 0 }.sorted { $0.inicio < $1.inicio }
+        // Hora sem leitura e sem corrida não tem dado: fica fora (não é R$ 0)
+        return g.values.filter { $0.temDados }.sorted { $0.inicio < $1.inicio }
     }
 
     /// Soma por hora do dia (0–23) pra comparar vários dias. `inicio` vira uma data de referência.
@@ -94,6 +105,7 @@ enum Horas {
             x.metros += h.metros
             x.semCorrida += h.semCorrida
             x.tempoTurno += h.tempoTurno
+            x.comLeitura += h.comLeitura
             x.comGPS = x.comGPS || h.comGPS
             g[k] = x
         }

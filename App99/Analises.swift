@@ -45,9 +45,10 @@ struct ResumoAgregado {
         guard duracao > 0 else { return .indeterminada(.calculo, "sem turnos") }
         return Medida(valor: confirmado / (duracao / 3600), confianca: .confirmado, fonte: .calculo, nota: "confirmado ÷ horas de turno")
     }
+    /// Sem custo registrado no período não há resultado a mostrar (não é igual ao faturamento).
     var resultado: Medida {
-        Medida(valor: confirmado - custosRegistrados, confianca: .estimado, fonte: .calculo,
-               nota: "confirmado − abastecimentos e custos registrados")
+        guard custosRegistrados > 0 else { return .indeterminada(.calculo, "nenhum custo registrado") }
+        return Medida(valor: confirmado - custosRegistrados, confianca: .estimado, fonte: .calculo)
     }
 
     // MARK: Grupos
@@ -56,34 +57,8 @@ struct ResumoAgregado {
         let id: String
         var faturamento = 0.0
         var corridas = 0
-        var ofertas = 0
-        var horas = 0.0
         var km = 0.0
-        var porHora: Double? { horas >= 0.25 ? faturamento / horas : nil }
         var porKm: Double? { km > 0 ? faturamento / km : nil }
-        var poucosDados: Bool { corridas < 3 }
-    }
-
-    /// Por faixa horária ou dia da semana: faturamento das corridas confirmadas (pela hora do fim),
-    /// ofertas recebidas e horas de turno naquele grupo (pra dar R$/h).
-    func grupos(_ a: Agrupamento) -> [Grupo] {
-        var g: [String: Grupo] = [:]
-        for r in resumos {
-            for c in r.corridas where c.confianca == .confirmado {
-                guard let quando = c.fimEm ?? c.encerradaEm ?? c.aceiteEm else { continue }
-                let k = Agrupamento.chave(quando, a)
-                g[k, default: Grupo(id: k)].faturamento += c.valor.valor ?? 0
-                g[k, default: Grupo(id: k)].corridas += 1
-            }
-            for o in r.ofertas {
-                let k = Agrupamento.chave(o.em, a)
-                g[k, default: Grupo(id: k)].ofertas += 1
-            }
-            for (k, s) in Self.horasPor(a, de: r.turno.inicio, ate: r.turno.fim ?? Date()) {
-                g[k, default: Grupo(id: k)].horas += s / 3600
-            }
-        }
-        return g.values.sorted { $0.id < $1.id }
     }
 
     /// Por região de embarque (só corridas confirmadas com GPS no embarque).
@@ -98,20 +73,6 @@ struct ResumoAgregado {
             }
         }
         return g.values.sorted { $0.faturamento > $1.faturamento }
-    }
-
-    /// Divide um intervalo em pedaços por hora e soma os segundos em cada grupo.
-    static func horasPor(_ a: Agrupamento, de inicio: Date, ate fim: Date, calendario: Calendar = .current) -> [String: TimeInterval] {
-        var r: [String: TimeInterval] = [:]
-        var t = inicio
-        while t < fim {
-            let proxima = calendario.nextDate(after: t, matching: DateComponents(minute: 0, second: 0),
-                                              matchingPolicy: .nextTime) ?? fim
-            let ate = min(proxima, fim)
-            r[Agrupamento.chave(t, a), default: 0] += ate.timeIntervalSince(t)
-            t = ate
-        }
-        return r
     }
 }
 

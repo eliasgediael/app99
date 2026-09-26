@@ -1,15 +1,5 @@
 import SwiftUI
 
-extension Confianca {
-    var cor: Color {
-        switch self {
-        case .confirmado:    return Tema.positivo
-        case .estimado:      return Tema.atencao
-        case .indeterminado: return Tema.neutro
-        }
-    }
-}
-
 enum Duracao {
     /// 4h52 · 18 min
     static func curta(_ s: TimeInterval) -> String {

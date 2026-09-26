@@ -13,13 +13,7 @@ struct BotaoIniciarLeitura: View {
             HStack(spacing: 12) {
                 SeletorView(picker: seletor.picker)
                     .frame(width: 44, height: 44)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Iniciar leitura da tela")
-                        .font(.headline)
-                    Text("Grava a tela e analisa as ofertas da 99")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Ligar leitura da tela")
             }
         }
     }

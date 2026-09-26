@@ -9,15 +9,12 @@ struct AtividadeView: View {
     @State private var diaEscolhido: Date?
     @State private var mostrarOfertas = false
 
-    private var dias: [Date] {
-        Array(Set(turnos.turnos.map { Calendar.current.startOfDay(for: $0.inicio) })).sorted(by: >)
-    }
-
     var body: some View {
-        let dias = self.dias
+        let comRegistro = turnos.turnosComRegistro
+        let dias = Array(Set(comRegistro.map { Calendar.current.startOfDay(for: $0.inicio) })).sorted(by: >)
         let dia = diaEscolhido.flatMap { d in dias.contains(d) ? d : nil } ?? dias.first
         let resumos = dia.map { d in
-            turnos.turnos.filter { Calendar.current.isDate($0.inicio, inSameDayAs: d) }
+            comRegistro.filter { Calendar.current.isDate($0.inicio, inSameDayAs: d) }
                 .sorted { $0.inicio < $1.inicio }
                 .map { turnos.resumo($0) }
         } ?? []
@@ -29,8 +26,7 @@ struct AtividadeView: View {
                     let horas = Horas.porHora(resumos)
                     if !horas.isEmpty {
                         Secao("Por hora") {
-                            GraficoHoras(horas: horas)
-                            TabelaHoras(horas: horas) { h in
+                            GraficoHoras(horas: horas) { h in
                                 if let t = h.turno {
                                     nav.abrirMapa(turno: t, intervalo: DateInterval(start: h.inicio, duration: 3600))
                                 }
@@ -43,7 +39,7 @@ struct AtividadeView: View {
                         LinhaDoTempoVisual(itens: Narrativa.itens(resumos, eventos: linha.eventos, ofertas: mostrarOfertas))
                     }
                 } else {
-                    EstadoVazio(icone: "clock", titulo: "Nenhum turno ainda")
+                    EstadoVazio(icone: "clock", titulo: "Nenhum turno registrado")
                 }
             }
             .padding(.horizontal, Espaco.margem)
@@ -59,7 +55,9 @@ struct AtividadeView: View {
         let anterior = dias[min(dias.count - 1, i + 1)]
         let proximo = dias[max(0, i - 1)]
         let a = ResumoAgregado(resumos: resumos)
-        let subtitulo = Datas.corridas(a.corridasConfirmadas) + " · " + Duracao.curta(a.duracao)
+        let comLeitura = resumos.contains { $0.temLeitura }
+        let subtitulo = comLeitura ? Datas.corridas(a.corridasConfirmadas) + " · " + Duracao.curta(a.duracao)
+                                   : Duracao.curta(a.duracao) + " sem leitura da tela"
         return HStack {
             Button { diaEscolhido = anterior } label: {
                 Image(systemName: "chevron.left").font(.body.weight(.semibold)).frame(width: 40, height: 40)
@@ -68,10 +66,10 @@ struct AtividadeView: View {
             .accessibilityLabel("Dia anterior")
             Spacer()
             VStack(spacing: 2) {
-                Text(Datas.longa(dia).capitalized)
+                Text(Datas.longaTitulo(dia))
                     .font(Tipo.apoio)
                     .foregroundStyle(Tema.textoSecundario)
-                Text(Formato.reais(a.confirmado))
+                Text(comLeitura ? Formato.reais(a.confirmado) : "—")
                     .font(Tipo.destaque)
                     .monospacedDigit()
                     .foregroundStyle(Tema.texto)
@@ -90,89 +88,110 @@ struct AtividadeView: View {
     }
 }
 
-// MARK: - Peças
+// MARK: - Gráficos
 
-/// Barras por hora: confirmado (menta) + estimado (âmbar) empilhados.
-struct GraficoHoras: View {
-    let horas: [HoraAtividade]
+/// Valor da barra tocada, logo acima do gráfico.
+struct DestaqueGrafico: View {
+    let titulo: String
+    let valor: String
+    let detalhe: String
+    var acao: (() -> Void)?
 
     var body: some View {
-        Chart {
-            ForEach(horas) { h in
-                BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.confirmado))
-                    .foregroundStyle(Tema.positivo)
-                    .cornerRadius(3)
-                BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.estimado))
-                    .foregroundStyle(Tema.atencao.opacity(0.7))
-                    .cornerRadius(3)
+        HStack(alignment: .center, spacing: Espaco.m) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(titulo).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario)
+                Text(valor).font(Tipo.metrica).monospacedDigit().foregroundStyle(Tema.texto)
+                if !detalhe.isEmpty {
+                    Text(detalhe).font(Tipo.legenda).monospacedDigit().foregroundStyle(Tema.textoSecundario)
+                }
+            }
+            Spacer(minLength: 0)
+            if let acao {
+                Button(action: acao) {
+                    Image(systemName: "map")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 40, height: 40)
+                        .background(Tema.superficieAlta, in: Circle())
+                        .foregroundStyle(Tema.primaria)
+                }
+                .accessibilityLabel("Ver no mapa")
             }
         }
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .hour, count: horas.count > 8 ? 3 : 1)) { _ in
-                AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
-            }
-        }
-        .chartYAxis {
-            AxisMarks(position: .leading) { v in
-                AxisGridLine().foregroundStyle(Tema.linha)
-                AxisValueLabel { if let n = v.as(Double.self) { Text("\(Int(n))") } }
-            }
-        }
-        .frame(height: 160)
-        .accessibilityLabel("Faturamento por hora")
+        .frame(minHeight: 64, alignment: .leading)
     }
 }
 
-struct TabelaHoras: View {
+/// Barras por hora (confirmado + estimado empilhados). Tocar numa barra mostra a hora.
+struct GraficoHoras: View {
     let horas: [HoraAtividade]
-    var aoTocar: ((HoraAtividade) -> Void)?
+    var aoAbrirMapa: ((HoraAtividade) -> Void)?
+    @State private var selecionada: Date?
 
     var body: some View {
-        VStack(spacing: 0) {
-            ForEach(horas) { h in
-                Button { aoTocar?(h) } label: { linha(h) }
-                    .buttonStyle(.plain)
-                    .disabled(aoTocar == nil || !h.comGPS)
-                if h.id != horas.last?.id { Divisoria() }
+        let atual = horas.first { $0.inicio == selecionada } ?? horas.last
+        VStack(alignment: .leading, spacing: Espaco.m) {
+            if let h = atual {
+                DestaqueGrafico(titulo: h.intervaloTexto, valor: Formato.reais(h.confirmado), detalhe: Self.detalhe(h),
+                                acao: acaoMapa(h))
+            }
+            if horas.contains(where: { $0.confirmado + $0.estimado > 0 }) {
+            Chart {
+                ForEach(horas) { h in
+                    BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.confirmado))
+                        .foregroundStyle(Tema.positivo.opacity(h.inicio == atual?.inicio ? 1 : 0.35))
+                        .cornerRadius(3)
+                    BarMark(x: .value("Hora", h.inicio, unit: .hour), y: .value("R$", h.estimado))
+                        .foregroundStyle(Tema.atencao.opacity(h.inicio == atual?.inicio ? 0.8 : 0.3))
+                        .cornerRadius(3)
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .hour, count: horas.count > 8 ? 3 : 1)) { _ in
+                    AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .omitted)))
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { v in
+                    AxisGridLine().foregroundStyle(Tema.linha)
+                    AxisValueLabel { if let n = v.as(Double.self) { Text("\(Int(n))") } }
+                }
+            }
+            .chartOverlay { proxy in
+                GeometryReader { geo in
+                    Rectangle().fill(.clear).contentShape(Rectangle())
+                        .onTapGesture { ponto in
+                            let x = ponto.x - geo[proxy.plotAreaFrame].origin.x
+                            guard let d = proxy.value(atX: x, as: Date.self) else { return }
+                            selecionada = horas.min {
+                                abs($0.inicio.addingTimeInterval(1800).timeIntervalSince(d))
+                                    < abs($1.inicio.addingTimeInterval(1800).timeIntervalSince(d))
+                            }?.inicio
+                        }
+                }
+            }
+            .frame(height: 160)
+            .accessibilityLabel("Faturamento por hora")
             }
         }
     }
 
-    private func linha(_ h: HoraAtividade) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Espaco.m) {
-            Text(h.rotulo)
-                .font(Tipo.apoio.monospacedDigit())
-                .foregroundStyle(Tema.textoSecundario)
-                .frame(width: 36, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Formato.reais(h.confirmado))
-                    .font(Tipo.valor)
-                    .monospacedDigit()
-                    .foregroundStyle(Tema.texto)
-                Text(detalhe(h))
-                    .font(Tipo.legenda)
-                    .monospacedDigit()
-                    .foregroundStyle(Tema.textoSecundario)
-            }
-            Spacer(minLength: Espaco.s)
-            if let ph = h.porHora {
-                Text(Formato.reais(ph) + "/h")
-                    .font(Tipo.legenda.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(Tema.textoSecundario)
-            }
-        }
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
+    private func acaoMapa(_ h: HoraAtividade) -> (() -> Void)? {
+        guard let abrir = aoAbrirMapa, h.comGPS, h.turno != nil else { return nil }
+        return { abrir(h) }
     }
 
-    private func detalhe(_ h: HoraAtividade) -> String {
+    static func detalhe(_ h: HoraAtividade) -> String {
         var p = [Datas.corridas(h.corridas)]
+        if h.estimadas > 0 { p.append("\(h.estimadas) ≈") }
         if h.comGPS { p.append(Formato.km(h.km)) }
-        if h.semCorrida >= 60 { p.append(Duracao.curta(h.semCorrida) + " livre") }
+        if h.semCorrida >= 60 { p.append(Duracao.curta(h.semCorrida) + " sem corrida") }
+        if let ph = h.porHora { p.append(Formato.reais(ph) + "/h") }
         return p.joined(separator: " · ")
     }
 }
+
+// MARK: - Linha do tempo
 
 struct LinhaDoTempoVisual: View {
     let itens: [ItemAtividade]

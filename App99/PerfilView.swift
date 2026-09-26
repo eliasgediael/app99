@@ -60,7 +60,7 @@ struct PerfilView: View {
                 NavigationLink {
                     List { StatusExtensaoView(monitor: monitor) }.navigationTitle("Status da leitura")
                 } label: {
-                    LabeledContent("Status", value: monitor.ligada ? "Ligada" : "—")
+                    LabeledContent("Status", value: monitor.ligada ? "Ligada" : "Sem sinal")
                 }
             }
 

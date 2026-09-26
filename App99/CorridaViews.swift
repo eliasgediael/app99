@@ -9,6 +9,12 @@ extension ResumoTurno {
         corridas.filter { $0.feita }.sorted { ($0.terminoVisto ?? .distantPast) < ($1.terminoVisto ?? .distantPast) }
     }
 
+    /// A leitura da tela chegou a funcionar neste turno (sem isso, faturamento e tempo livre são desconhecidos, não zero).
+    var temLeitura: Bool {
+        !corridas.isEmpty || !ofertas.isEmpty
+            || segmentos.contains { $0.estado == .aguardando || $0.estado == .aCaminho || $0.estado == .emCorrida }
+    }
+
     var emAndamento: CorridaAnalisada? {
         corridas.last { $0.confianca == nil && $0.estado != .cancelada }
     }

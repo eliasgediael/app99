@@ -24,7 +24,7 @@ struct ViagensView: View {
     }
 
     var body: some View {
-        let resumos = Historico.turnos(turnos.turnos, em: periodo)
+        let resumos = Historico.turnos(turnos.turnosComRegistro, em: periodo)
             .sorted { $0.inicio > $1.inicio }
             .map { turnos.resumo($0) }
         let dias = Dictionary(grouping: resumos) { Calendar.current.startOfDay(for: $0.turno.inicio) }
@@ -32,15 +32,24 @@ struct ViagensView: View {
             .sorted { $0.id > $1.id }
         let a = ResumoAgregado(resumos: resumos)
 
+        let vazio = modo == .corridas ? dias.allSatisfy({ $0.corridas.isEmpty }) : a.ofertas == 0
         List {
-            cabecalho(a)
-                .listRowBackground(Tema.fundo)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: Espaco.m, leading: Espaco.margem, bottom: Espaco.l, trailing: Espaco.margem))
-            if modo == .corridas {
-                corridas(dias)
+            if vazio {
+                EstadoVazio(icone: modo == .corridas ? "car" : "tag",
+                            titulo: resumos.isEmpty ? "Nenhum turno \(Self.noPeriodo(periodo))"
+                                                    : (modo == .corridas ? "Nenhuma corrida" : "Nenhuma oferta"))
+                    .listRowBackground(Tema.fundo)
+                    .listRowSeparator(.hidden)
             } else {
-                ofertas(dias)
+                cabecalho(a)
+                    .listRowBackground(Tema.fundo)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: Espaco.m, leading: Espaco.margem, bottom: Espaco.l, trailing: Espaco.margem))
+                if modo == .corridas {
+                    corridas(dias)
+                } else {
+                    ofertas(dias)
+                }
             }
         }
         .listStyle(.plain)
@@ -92,13 +101,18 @@ struct ViagensView: View {
         return partes.joined(separator: " · ")
     }
 
-    @ViewBuilder
-    private func corridas(_ dias: [Dia]) -> some View {
-        if dias.allSatisfy({ $0.corridas.isEmpty }) {
-            EstadoVazio(icone: "car", titulo: "Nenhuma corrida")
-                .listRowBackground(Tema.fundo)
-                .listRowSeparator(.hidden)
+    static func noPeriodo(_ p: Periodo) -> String {
+        switch p {
+        case .hoje:      return "hoje"
+        case .ontem:     return "ontem"
+        case .ultimos7:  return "nos últimos 7 dias"
+        case .ultimos30: return "nos últimos 30 dias"
+        case .semana:    return "nesta semana"
+        case .mes:       return "neste mês"
         }
+    }
+
+    private func corridas(_ dias: [Dia]) -> some View {
         ForEach(dias) { dia in
             let lista = dia.corridas
             if !lista.isEmpty {
@@ -117,13 +131,7 @@ struct ViagensView: View {
         }
     }
 
-    @ViewBuilder
     private func ofertas(_ dias: [Dia]) -> some View {
-        if dias.allSatisfy({ $0.ofertas.isEmpty }) {
-            EstadoVazio(icone: "tag", titulo: "Nenhuma oferta")
-                .listRowBackground(Tema.fundo)
-                .listRowSeparator(.hidden)
-        }
         ForEach(dias) { dia in
             let lista = dia.ofertas
             if !lista.isEmpty {

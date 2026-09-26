@@ -164,12 +164,11 @@ struct ResumoTurno {
     var outrosCustos = Medida(valor: 0, confianca: .confirmado, fonte: .usuario)
     var custoEstimadoPorKm = Medida.indeterminada(.configuracao, "sem GPS")
 
-    var tempoAtivo: Medida {
-        Medida(valor: (duracao.valor ?? 0) - (tempoPorEstado[.pausado] ?? 0), confianca: .confirmado, fonte: .relogio,
-               nota: "duração − pausas")
-    }
-    /// Faturamento confirmado − custos registrados à mão.
+    /// Faturamento confirmado − custos registrados à mão. Sem custo registrado não há resultado a mostrar.
     var resultado: Medida {
+        guard (combustivel.valor ?? 0) + (outrosCustos.valor ?? 0) > 0 else {
+            return .indeterminada(.usuario, "nenhum custo registrado")
+        }
         var r = Medida.subtrair(faturamentoConfirmado,
                                 Medida(valor: (combustivel.valor ?? 0) + (outrosCustos.valor ?? 0),
                                        confianca: .confirmado, fonte: .usuario),
@@ -184,28 +183,11 @@ struct ResumoTurno {
     }
     var porKm: Medida { Medida.dividir(faturamentoConfirmado, km, nota: "confirmado ÷ km do GPS") }
     var porHora: Medida { Medida.dividir(faturamentoConfirmado, duracao, fator: 3600, nota: "confirmado ÷ duração") }
-    var porHoraAtivo: Medida { Medida.dividir(faturamentoConfirmado, tempoAtivo, fator: 3600, nota: "confirmado ÷ tempo sem pausa") }
-    var mediaPorCorrida: Medida {
-        Medida.dividir(faturamentoConfirmado,
-                       Medida(valor: Double(corridas.filter { $0.confianca == .confirmado }.count),
-                              confianca: .confirmado, fonte: .calculo),
-                       nota: "por corrida confirmada")
-    }
-    var combustivelPorKm: Medida {
-        var m = Medida.dividir(combustivel, km, nota: "abastecido ÷ km (fica preciso em vários turnos)")
-        if m.valor != nil { m.confianca = .estimado }
-        return m
-    }
-    func percentual(_ e: EstadoMotorista) -> Double? {
-        guard let d = duracao.valor, d > 0 else { return nil }
-        return (tempoPorEstado[e] ?? 0) / d
-    }
 
     var corridasConfirmadas: Int { corridas.filter { $0.confianca == .confirmado }.count }
     /// Corridas que aconteceram (confirmadas + estimadas). Canceladas/sem evidência ficam de fora.
     var corridasFeitas: Int { corridas.filter { $0.confianca == .confirmado || $0.confianca == .estimado }.count }
     var corridasEstimadas: Int { corridas.filter { $0.confianca == .estimado }.count }
-    var corridasIndeterminadas: Int { corridas.filter { $0.confianca == .indeterminado }.count }
 }
 
 enum AnaliseTurno {
@@ -402,46 +384,10 @@ enum Periodo: CaseIterable {
     }
 }
 
-/// Chaves de agrupamento. Tudo sai só dos seus dados; grupo com poucos dados deve ser mostrado como tal.
-enum Agrupamento {
-    case hora            // "19"
-    case faixaHoraria    // "18–21"
-    case diaDaSemana     // "sáb"
-    case data            // número do dia (DiaRelatorio.numero)
-    case regiao          // geohash de 6 letras
-
-    static func chave(_ data: Date, _ a: Agrupamento, calendario: Calendar = .current) -> String {
-        let h = calendario.component(.hour, from: data)
-        switch a {
-        case .hora:         return String(format: "%02d", h)
-        case .faixaHoraria: let i = h / 3 * 3; return String(format: "%02d–%02d", i, i + 3)
-        case .diaDaSemana:  return calendario.shortWeekdaySymbols[calendario.component(.weekday, from: data) - 1]
-        case .data:         return String(DiaRelatorio.numero(de: data))
-        case .regiao:       return ""
-        }
-    }
-}
-
 enum Historico {
     static func turnos(_ turnos: [Turno], em periodo: Periodo, agora: Date = Date()) -> [Turno] {
         // Cada turno conta no dia em que começou (turno da noite que passa da meia-noite é "de ontem")
         let i = periodo.intervalo(agora: agora)
         return turnos.filter { $0.inicio >= i.start && $0.inicio < i.end }
-    }
-
-    static func ultimos(_ n: Int, de turnos: [Turno]) -> [Turno] {
-        Array(turnos.filter { !$0.ativo }.sorted { $0.inicio > $1.inicio }.prefix(n))
-    }
-
-    static func agrupar<T>(_ itens: [T], por a: Agrupamento, data: (T) -> Date?, regiao: (T) -> String? = { _ in nil })
-        -> [String: [T]] {
-        var grupos: [String: [T]] = [:]
-        for item in itens {
-            let chave: String?
-            if a == .regiao { chave = regiao(item) } else { chave = data(item).map { Agrupamento.chave($0, a) } }
-            guard let chave else { continue }   // sem dado = fora do grupo (não chutar)
-            grupos[chave, default: []].append(item)
-        }
-        return grupos
     }
 }

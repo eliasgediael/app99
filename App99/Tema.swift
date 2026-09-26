@@ -461,8 +461,9 @@ extension Datas {
 
     static func corridas(_ n: Int) -> String { n == 1 ? "1 corrida" : "\(n) corridas" }
 
-    /// "sábado, 26 de set."
-    static func longa(_ d: Date) -> String {
-        d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated).locale(Locale(identifier: "pt_BR")))
+    /// "Sábado, 26 de set." (só a primeira letra maiúscula)
+    static func longaTitulo(_ d: Date) -> String {
+        let t = d.formatted(.dateTime.weekday(.wide).day().month(.abbreviated).locale(Locale(identifier: "pt_BR")))
+        return t.prefix(1).uppercased() + t.dropFirst()
     }
 }

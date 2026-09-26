@@ -37,23 +37,32 @@ struct PainelTurno: View {
     // MARK: Sem turno
 
     private var semTurno: some View {
-        let semana = ResumoAgregado(resumos: Historico.turnos(turnos.turnos, em: .ultimos7).map { turnos.resumo($0) })
+        let registrados = turnos.turnosComRegistro
+        let semana = ResumoAgregado(resumos: Historico.turnos(registrados, em: .ultimos7).map { turnos.resumo($0) })
+        let trabalhouHoje = !Historico.turnos(registrados, em: .hoje).isEmpty
+        let ultimo = registrados.last { !$0.ativo }
         return ScrollView {
             VStack(alignment: .leading, spacing: Espaco.xxl) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(Datas.longa(Date()).capitalized)
+                    Text(Datas.longaTitulo(Date()))
                         .font(Tipo.apoio)
                         .foregroundStyle(Tema.textoSecundario)
-                    Text(Formato.reais(confirmadoHoje))
-                        .font(Tipo.heroi)
-                        .monospacedDigit()
-                        .foregroundStyle(Tema.texto)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                    Text("hoje")
-                        .font(Tipo.apoio)
-                        .foregroundStyle(Tema.textoSecundario)
-                    if metaDiaria > 0 {
+                    if trabalhouHoje {
+                        Text(Formato.reais(confirmadoHoje))
+                            .font(Tipo.heroi)
+                            .monospacedDigit()
+                            .foregroundStyle(Tema.texto)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
+                        Text("hoje")
+                            .font(Tipo.apoio)
+                            .foregroundStyle(Tema.textoSecundario)
+                    } else {
+                        Text("Sem turno hoje")
+                            .font(.largeTitle.weight(.bold))
+                            .foregroundStyle(Tema.texto)
+                    }
+                    if metaDiaria > 0 && trabalhouHoje {
                         BarraMeta(valor: confirmadoHoje, meta: metaDiaria).padding(.top, 6)
                     }
                 }
@@ -68,7 +77,7 @@ struct PainelTurno: View {
                     }
                 }
 
-                if let u = turnos.ultimoEncerrado {
+                if let u = ultimo {
                     let r = turnos.resumo(u)
                     Secao("Último turno") {
                         NavigationLink { ResumoTurnoView(turno: u) } label: {
@@ -77,12 +86,12 @@ struct PainelTurno: View {
                                     Text(ResumoTurnoView.titulo(u))
                                         .font(Tipo.apoio.weight(.medium))
                                         .foregroundStyle(Tema.texto)
-                                    Text(Duracao.curta(r.duracao.valor ?? 0) + " · " + Datas.corridas(r.corridasConfirmadas))
+                                    Text(Duracao.curta(r.duracao.valor ?? 0) + (r.temLeitura ? " · " + Datas.corridas(r.corridasConfirmadas) : ""))
                                         .font(Tipo.legenda)
                                         .foregroundStyle(Tema.textoSecundario)
                                 }
                                 Spacer()
-                                Text(Formato.reais(r.faturamentoConfirmado.valor ?? 0))
+                                Text(r.temLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")
                                     .font(Tipo.valor)
                                     .monospacedDigit()
                                     .foregroundStyle(Tema.texto)
@@ -127,6 +136,7 @@ struct PainelTurno: View {
         let estado = t.pausadoAgora ? EstadoMotorista.pausado : (r.segmentos.last?.estado ?? .semLeitura)
         let desde = r.segmentos.last?.inicio ?? t.inicio
         let ultimas = Array(r.feitas.suffix(3).reversed())
+        let comLeitura = r.temLeitura
 
         return ScrollView {
             VStack(alignment: .leading, spacing: Espaco.xxl) {
@@ -141,13 +151,13 @@ struct PainelTurno: View {
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(Formato.reais(r.faturamentoConfirmado.valor ?? 0))
+                    Text(comLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")
                         .font(Tipo.heroi)
                         .monospacedDigit()
                         .foregroundStyle(Tema.texto)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                    Text("faturamento confirmado")
+                    Text(comLeitura ? "faturamento confirmado" : "aguardando a leitura da tela")
                         .font(Tipo.apoio)
                         .foregroundStyle(Tema.textoSecundario)
                     if metaDiaria > 0 {
@@ -156,12 +166,18 @@ struct PainelTurno: View {
                 }
 
                 GradeMetricas {
-                    Metrica(r.porHora, "por hora") { Formato.reais($0) }
-                    Metrica(r.porKm, "por km") { Formato.reais($0) }
+                    if comLeitura {
+                        Metrica(r.porHora, "por hora") { Formato.reais($0) }
+                        Metrica(r.porKm, "por km") { Formato.reais($0) }
+                    } else {
+                        Metrica("—", "por hora")
+                        Metrica("—", "por km")
+                    }
                     Metrica(r.km, "km") { Formato.km($0) }
                     Metrica(Duracao.curta(r.duracao.valor ?? 0), "de turno")
-                    Metrica("\(r.corridasConfirmadas)", r.corridasEstimadas > 0 ? "corridas · \(r.corridasEstimadas) ≈" : "corridas")
-                    Metrica(Duracao.curta(r.tempoPorEstado[.aguardando] ?? 0), "sem corrida")
+                    Metrica(comLeitura ? "\(r.corridasConfirmadas)" : "—",
+                            r.corridasEstimadas > 0 ? "corridas · \(r.corridasEstimadas) ≈" : "corridas")
+                    Metrica(comLeitura ? Duracao.curta(r.tempoPorEstado[.aguardando] ?? 0) : "—", "sem corrida")
                 }
 
                 alertas

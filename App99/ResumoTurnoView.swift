@@ -11,33 +11,41 @@ struct ResumoTurnoView: View {
         let r = turnos.resumo(turno)
         let feitas = r.feitas
         let horas = Horas.porHora([r])
+        let comLeitura = r.temLeitura
         ScrollView {
             VStack(alignment: .leading, spacing: Espaco.xxl) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(Self.titulo(turno))
                         .font(Tipo.apoio)
                         .foregroundStyle(Tema.textoSecundario)
-                    Text(Formato.reais(r.faturamentoConfirmado.valor ?? 0))
+                    Text(comLeitura ? Formato.reais(r.faturamentoConfirmado.valor ?? 0) : "—")
                         .font(Tipo.destaque)
                         .monospacedDigit()
                         .foregroundStyle(Tema.texto)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
-                    Text("faturamento confirmado")
+                    Text(comLeitura ? "faturamento confirmado" : "sem leitura da tela")
                         .font(Tipo.apoio)
                         .foregroundStyle(Tema.textoSecundario)
                 }
 
                 GradeMetricas {
-                    Metrica(r.porHora, "por hora") { Formato.reais($0) }
-                    Metrica(r.porKm, "por km") { Formato.reais($0) }
+                    if comLeitura {
+                        Metrica(r.porHora, "por hora") { Formato.reais($0) }
+                        Metrica(r.porKm, "por km") { Formato.reais($0) }
+                    } else {
+                        Metrica("—", "por hora")
+                        Metrica("—", "por km")
+                    }
                     Metrica(r.km, "km") { Formato.km($0) }
                     Metrica(Duracao.curta(r.duracao.valor ?? 0), "de turno")
-                    Metrica("\(r.corridasConfirmadas)", r.corridasEstimadas > 0 ? "corridas · \(r.corridasEstimadas) ≈" : "corridas")
-                    Metrica("\(r.ofertas.filter { $0.resultado == .aceita }.count)/\(r.ofertas.count)", "ofertas aceitas")
+                    Metrica(comLeitura ? "\(r.corridasConfirmadas)" : "—",
+                            r.corridasEstimadas > 0 ? "corridas · \(r.corridasEstimadas) ≈" : "corridas")
+                    Metrica(r.ofertas.isEmpty ? "—" : "\(r.ofertas.filter { $0.resultado == .aceita }.count)/\(r.ofertas.count)",
+                            "ofertas aceitas")
                 }
 
-                if !r.tempoPorEstado.isEmpty {
+                if comLeitura && !r.tempoPorEstado.isEmpty {
                     Secao("Tempo") { BarraEstados(tempos: r.tempoPorEstado) }
                 }
 
@@ -45,7 +53,9 @@ struct ResumoTurnoView: View {
                     Secao("Por hora") { GraficoHoras(horas: horas) }
                 }
 
-                Secao("Financeiro") { financeiro(r) }
+                if comLeitura {
+                    Secao("Financeiro") { financeiro(r) }
+                }
 
                 if !feitas.isEmpty {
                     Secao("Corridas") {
@@ -79,10 +89,12 @@ struct ResumoTurnoView: View {
                         Button { Navegacao.shared.abrirMapa(turno: turno.id) } label: {
                             LinhaNavegacao("Ver no mapa", "map", r.km.valor.map(Formato.km) ?? "")
                         }
-                        Divisoria()
                     }
-                    NavigationLink { OfertasTurnoView(r: r) } label: {
-                        LinhaNavegacao("Ofertas", "tag", "\(r.ofertas.count)")
+                    if r.temGPS && !r.ofertas.isEmpty { Divisoria() }
+                    if !r.ofertas.isEmpty {
+                        NavigationLink { OfertasTurnoView(r: r) } label: {
+                            LinhaNavegacao("Ofertas", "tag", "\(r.ofertas.count)")
+                        }
                     }
                 }
                 .buttonStyle(.plain)
@@ -104,14 +116,18 @@ struct ResumoTurnoView: View {
                 Divisoria()
                 LinhaMetrica("Estimado", "≈ " + Formato.reais(r.faturamentoEstimado.valor ?? 0), cor: Tema.atencao)
             }
-            Divisoria()
-            LinhaMetrica("Abastecimentos", Formato.reais(r.combustivel.valor ?? 0))
+            if (r.combustivel.valor ?? 0) > 0 {
+                Divisoria()
+                LinhaMetrica("Abastecimentos", Formato.reais(r.combustivel.valor ?? 0))
+            }
             if (r.outrosCustos.valor ?? 0) > 0 {
                 Divisoria()
                 LinhaMetrica("Outros custos", Formato.reais(r.outrosCustos.valor ?? 0))
             }
-            Divisoria()
-            LinhaMetrica("Resultado", r.resultado.texto { Formato.reais($0) })
+            if r.resultado.valor != nil {
+                Divisoria()
+                LinhaMetrica("Resultado", r.resultado.texto { Formato.reais($0) })
+            }
             if r.custoEstimadoPorKm.valor != nil {
                 Divisoria()
                 LinhaMetrica("Custo da moto", r.custoEstimadoPorKm.texto { Formato.reais($0) })
@@ -144,7 +160,6 @@ struct OfertasTurnoView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Tema.fundo.ignoresSafeArea())
-        .overlay { if r.ofertas.isEmpty { EstadoVazio(icone: "tag", titulo: "Nenhuma oferta") } }
         .navigationTitle("Ofertas")
         .navigationBarTitleDisplayMode(.inline)
     }

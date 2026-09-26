@@ -90,6 +90,19 @@ final class TurnoStore: ObservableObject {
 
     // MARK: Análise
 
+    /// Turno com algo registrado: ativo, oferta/corrida lida, custo, ou leitura ligada por 15 min ou mais.
+    /// Turno aberto e fechado sem nada não é "zero": é ausência de dado, e fica fora das listas.
+    func temRegistro(_ t: Turno) -> Bool {
+        if t.ativo { return true }
+        if custos.contains(where: { $0.turno == t.id || ($0.turno == nil && t.contem($0.em)) }) { return true }
+        let eventos = LinhaDoTempoStore.shared.eventos.filter { $0.seq > 0 && t.contem($0.data) }
+        let tiposCorrida: Set<TipoEvento> = [.ofertaDetectada, .aceiteDetectado, .telaEmbarque, .passageiroABordo, .fimDetectado]
+        if eventos.contains(where: { tiposCorrida.contains($0.tipo) }) { return true }
+        return !eventos.isEmpty && t.duracao() >= 15 * 60
+    }
+
+    var turnosComRegistro: [Turno] { turnos.filter(temRegistro) }
+
     func resumo(_ turno: Turno, agora: Date = Date()) -> ResumoTurno {
         AnaliseTurno.calcular(turno, eventos: LinhaDoTempoStore.shared.eventos, custos: custos,
                               pontos: turno.id == atual?.id ? pontosAtuais : pontos(de: turno),
