@@ -26,7 +26,7 @@ targets:
     info:
       path: App99/Info.plist
       properties:
-        CFBundleDisplayName: App 99
+        CFBundleDisplayName: Apex
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
@@ -36,8 +36,8 @@ targets:
         UIBackgroundModes:
           - audio
           - location
-        NSLocationWhenInUseUsageDescription: 'Durante o turno, o App 99 usa sua localização para medir os km rodados, o tempo parado e onde as corridas começam e terminam. Só enquanto o turno estiver ativo; os dados ficam só no seu iPhone.'
-        NSLocationAlwaysAndWhenInUseUsageDescription: 'Durante o turno, o App 99 usa sua localização para medir os km rodados, o tempo parado e onde as corridas começam e terminam. Só enquanto o turno estiver ativo; os dados ficam só no seu iPhone.'
+        NSLocationWhenInUseUsageDescription: 'Durante o turno, o Apex usa sua localização para medir os km rodados, o tempo parado e onde as corridas começam e terminam. Só enquanto o turno estiver ativo; os dados ficam só no seu iPhone.'
+        NSLocationAlwaysAndWhenInUseUsageDescription: 'Durante o turno, o Apex usa sua localização para medir os km rodados, o tempo parado e onde as corridas começam e terminam. Só enquanto o turno estiver ativo; os dados ficam só no seu iPhone.'
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.elias.app99
@@ -58,7 +58,7 @@ targets:
     info:
       path: Broadcast/Info.plist
       properties:
-        CFBundleDisplayName: App 99
+        CFBundleDisplayName: Apex
         NSExtension:
           NSExtensionPointIdentifier: com.apple.broadcast-services-upload
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler

@@ -28,7 +28,7 @@ class SampleHandler: RPBroadcastSampleHandler {
     /// Único lugar que decide estado de corrida e faturamento (ver MotorCorrida).
     private lazy var motor = MotorCorrida(diario: diario)
 
-    private var appNaFrenteAte = Date.distantPast   // App 99 aberto na tela: não ler
+    private var appNaFrenteAte = Date.distantPast   // Apex aberto na tela: não ler
     private var modoTeste = false                     // print de teste: avisa, mas não conta
 
     // Só na thread principal
@@ -77,7 +77,7 @@ class SampleHandler: RPBroadcastSampleHandler {
             case .encerrarLeitura:
                 // broadcastFinished() roda em seguida e fecha as corridas abertas
                 let motivo = NSError(domain: "App99", code: 1,
-                                     userInfo: [NSLocalizedDescriptionKey: "Turno encerrado no App 99."])
+                                     userInfo: [NSLocalizedDescriptionKey: "Turno encerrado no Apex."])
                 DispatchQueue.main.async { self.finishBroadcastWithError(motivo) }
             }
         }
@@ -113,7 +113,7 @@ class SampleHandler: RPBroadcastSampleHandler {
                 self.pedirAjustes(tentativa: tentativa + 1)
             } else {
                 Notificador.enviar("Leitura ligada, mas seus ajustes não chegaram: usando o padrão "
-                                   + "(mínimo \(Formato.reais(ConfigMoto.atual.minimoPorKm))/km). Abra o App 99 pra enviar.")
+                                   + "(mínimo \(Formato.reais(ConfigMoto.atual.minimoPorKm))/km). Abra o Apex pra enviar.")
             }
         }
     }
@@ -200,7 +200,7 @@ class SampleHandler: RPBroadcastSampleHandler {
 
     private func analisar(_ pixelBuffer: CVPixelBuffer, orientacao: CGImagePropertyOrientation) {
         diario.acumularTempo()
-        guard Date() >= appNaFrenteAte else { return }   // é a tela do próprio App 99
+        guard Date() >= appNaFrenteAte else { return }   // é a tela do próprio Apex
 
         let linhas: [String]
         do {

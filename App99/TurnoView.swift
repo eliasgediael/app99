@@ -100,7 +100,7 @@ struct PainelTurno: View {
             }
             if gps.estado == .semPermissao || gps.estado == .semSinal {
                 Text(gps.estado == .semPermissao
-                     ? "Sem permissão de localização: km e R$/km ficam em branco. Ative em Ajustes → App 99 → Localização."
+                     ? "Sem permissão de localização: km e R$/km ficam em branco. Ative em Ajustes → Apex → Localização."
                      : "GPS sem sinal: esse trecho não entra nos km.")
                     .font(.caption)
                     .foregroundStyle(.orange)

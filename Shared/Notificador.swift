@@ -26,7 +26,7 @@ enum Notificador {
     }
 
     static func enviar(_ frase: String) {
-        enviar(titulo: "App 99", subtitulo: nil, corpo: frase)
+        enviar(titulo: "Apex", subtitulo: nil, corpo: frase)
     }
 
     /// 📋 Resumo de hoje

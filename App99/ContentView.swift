@@ -28,7 +28,7 @@ struct ContentView: View {
                     }
                 }
             }
-            .navigationTitle("App 99")
+            .navigationTitle("Apex")
         }
         .task {
             if TurnoStore.shared.atual != nil { Localizacao.shared.ligar() }   // reabriu com turno ativo
