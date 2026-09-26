@@ -263,71 +263,6 @@ private struct CorridasView: View {
     }
 }
 
-/// Uma corrida numa lista (resumo do turno e aba Viagens).
-struct LinhaCorrida: View {
-    let c: CorridaAnalisada
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text((c.aceiteEm ?? c.aBordoEm ?? c.encerradaEm).map { $0.formatted(date: .omitted, time: .shortened) } ?? "—")
-                    .font(.subheadline.bold())
-                Text(([c.kmGPS.valor.map(Formato.km), c.duracao.valor.map(Duracao.curta)] as [String?]).compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            MedidaTexto(medida: c.valor) { Formato.reais($0) }
-            Etiqueta(texto: c.confianca?.nome ?? "ABERTA", cor: c.confianca?.cor ?? .blue)
-        }
-    }
-}
-
-struct CorridaDetalheView: View {
-    let c: CorridaAnalisada
-    var r: ResumoTurno? = nil
-
-    var body: some View {
-        List {
-            Section {
-                LabeledContent("Estado", value: c.estado?.nome ?? "—")
-                LabeledContent("Confiança") { Etiqueta(texto: c.confianca?.nome ?? "ABERTA", cor: c.confianca?.cor ?? .blue) }
-                if c.motivo != .nenhum {
-                    Text(c.motivo.texto(extra: c.falta)).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Section("Valor") {
-                LabeledContent("Ofertado", value: c.valorOfertaCent.map { Formato.reais(Double($0) / 100) } ?? "—")
-                LabeledContent("Final (tela de fim)", value: c.valorFinalCent.map { Formato.reais(Double($0) / 100) } ?? "não visto")
-                LabeledContent("Associação oferta ↔ aceite") { Etiqueta(texto: c.ligacao.nome, cor: c.ligacao.cor) }
-                Campo("R$/km", c.porKm) { Formato.reais($0) }
-                Campo("R$/hora", c.porHora) { Formato.reais($0) }
-            }
-            Section("Distância e tempo") {
-                LabeledContent("Busca (oferta)", value: c.buscaM.map { Formato.km(Double($0) / 1000) } ?? "—")
-                LabeledContent("Viagem (oferta)", value: c.viagemM.map { Formato.km(Double($0) / 1000) } ?? "—")
-                Campo("Km a bordo (GPS)", c.kmGPS) { Formato.km($0) }
-                Campo("Duração a bordo", c.duracao) { Duracao.curta($0) }
-                if let n = c.nota { LabeledContent("Nota do passageiro", value: Formato.nota(n)) }
-            }
-            Section("Horários") {
-                hora("Aceite", c.aceiteEm)
-                hora("Passageiro a bordo", c.aBordoEm)
-                hora("Fim (tela)", c.fimEm)
-                hora("Encerrada", c.encerradaEm)
-            }
-            Section("Onde") {
-                LabeledContent("Origem (região)", value: c.regiaoOrigem ?? "sem GPS no embarque")
-                LabeledContent("Destino (região)", value: c.regiaoDestino ?? "sem tela de fim com GPS")
-            }
-        }
-        .navigationTitle("Corrida #\(c.id)")
-    }
-
-    private func hora(_ t: String, _ d: Date?) -> some View {
-        LabeledContent(t, value: d.map { $0.formatted(date: .omitted, time: .standard) } ?? "—")
-    }
-}
-
 // MARK: - Ofertas
 
 private struct OfertasView: View {
@@ -349,34 +284,6 @@ private struct OfertasView: View {
             }
         }
         .navigationTitle("Ofertas")
-    }
-}
-
-/// Uma oferta numa lista (resumo do turno e aba Viagens). Oferta não é faturamento.
-struct LinhaOferta: View {
-    let o: OfertaAnalisada
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(o.em.formatted(date: .omitted, time: .shortened)).font(.subheadline.bold())
-                Text(([Formato.km(o.km), o.porKm.map { Formato.reais($0) + "/km" }, o.nota.map { "⭐ " + Formato.nota($0) }] as [String?])
-                    .compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(Formato.reais(Double(o.valorCent) / 100)).monospacedDigit()
-            resultado(o)
-        }
-    }
-
-    @ViewBuilder
-    private func resultado(_ o: OfertaAnalisada) -> some View {
-        switch o.resultado {
-        case .aceita:    Etiqueta(texto: "ACEITA", cor: o.associacao?.cor ?? .green)
-        case .naoAceita: Etiqueta(texto: "NÃO", cor: .gray)
-        case .emAberto:  Etiqueta(texto: "…", cor: .blue)
-        }
     }
 }
 

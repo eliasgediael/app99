@@ -122,6 +122,27 @@ enum Geohash {
         }
         return resultado
     }
+
+    /// Centro aproximado da célula (usado só pra dar nome à região, se você ativar).
+    static func centro(_ hash: String) -> Coordenada? {
+        var faixaLat = (-90.0, 90.0), faixaLon = (-180.0, 180.0)
+        var par = true
+        for ch in hash {
+            guard let i = base32.firstIndex(of: ch) else { return nil }
+            for b in stride(from: 4, through: 0, by: -1) {
+                let bit = (i >> b) & 1
+                if par {
+                    let meio = (faixaLon.0 + faixaLon.1) / 2
+                    if bit == 1 { faixaLon.0 = meio } else { faixaLon.1 = meio }
+                } else {
+                    let meio = (faixaLat.0 + faixaLat.1) / 2
+                    if bit == 1 { faixaLat.0 = meio } else { faixaLat.1 = meio }
+                }
+                par.toggle()
+            }
+        }
+        return Coordenada(lat: (faixaLat.0 + faixaLat.1) / 2, lon: (faixaLon.0 + faixaLon.1) / 2)
+    }
 }
 
 // MARK: - Medida com confiança
