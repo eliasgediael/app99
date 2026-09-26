@@ -3,10 +3,27 @@ import SwiftUI
 /// Abas do app. Guardadas num objeto só pra, nas próximas fases, uma tela poder abrir outra aba.
 enum Aba: Hashable { case turno, viagens, mapa, atividade, analises }
 
+/// O que o Mapa deve mostrar quando outra tela manda abrir (corrida → mapa, hora → mapa).
+struct FocoMapa: Equatable {
+    var turno: UUID
+    var intervalo: DateInterval?
+    var corrida: Int?
+}
+
 @MainActor
 final class Navegacao: ObservableObject {
+    static let shared = Navegacao()
+
     @Published var aba: Aba = .turno
     @Published var perfilAberto = false
+    @Published var focoMapa: FocoMapa?
+
+    /// Abre a aba Mapa já focada (fecha folhas abertas por cima).
+    func abrirMapa(turno: UUID, intervalo: DateInterval? = nil, corrida: Int? = nil) {
+        perfilAberto = false
+        focoMapa = FocoMapa(turno: turno, intervalo: intervalo, corrida: corrida)
+        aba = .mapa
+    }
 }
 
 /// Raiz do app: 5 abas + Perfil (canto superior direito).
@@ -15,14 +32,14 @@ final class Navegacao: ObservableObject {
 struct ContentView: View {
     @StateObject private var monitor = MonitorExtensao()
     @StateObject private var relatorio = RelatorioStore()
-    @StateObject private var nav = Navegacao()
+    @ObservedObject private var nav = Navegacao.shared
     @ObservedObject private var linha = LinhaDoTempoStore.shared   // um só, compartilhado com o turno
     @Environment(\.scenePhase) private var fase
 
     var body: some View {
         TabView(selection: $nav.aba) {
             NavigationStack {
-                List { PainelTurno(monitor: monitor) }
+                PainelTurno(monitor: monitor)
                     .navigationTitle("Turno")
                     .botaoPerfil(nav)
             }

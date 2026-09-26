@@ -1,7 +1,7 @@
 import SwiftUI
 import MapKit
 
-/// Resumo de um turno: primeiro os números principais, depois cada parte numa tela própria.
+/// Resumo de um turno: primeiro quanto rendeu, depois o ritmo e o tempo; cada parte abre numa tela própria.
 struct ResumoTurnoView: View {
     let turno: Turno
     @ObservedObject var turnos = TurnoStore.shared
@@ -11,68 +11,123 @@ struct ResumoTurnoView: View {
     var body: some View {
         conteudo(turnos.resumo(turno))
             .navigationTitle("Resumo do turno")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { Button("OK") { fechar() } }
     }
 
     private func conteudo(_ r: ResumoTurno) -> some View {
-        List {
-            principais(r)
-            partes(r)
+        ScrollView {
+            VStack(alignment: .leading, spacing: Espaco.xl) {
+                principais(r)
+                ritmo(r)
+                avisos(r)
+                Bloco("Onde foi o tempo") {
+                    if r.tempoPorEstado.isEmpty {
+                        Text("Sem dados de tempo neste turno.").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+                    } else {
+                        BarraEstados(tempos: r.tempoPorEstado)
+                    }
+                }
+                Bloco("Detalhes") { partes(r) }
+            }
+            .padding(.horizontal, Espaco.margem)
+            .padding(.vertical, Espaco.l)
         }
+        .background(Tema.fundo.ignoresSafeArea())
     }
 
     private func principais(_ r: ResumoTurno) -> some View {
-        Section {
-            NumeroDestaque(valor: Formato.reais(r.faturamentoConfirmado.valor ?? 0),
-                           rotulo: "faturamento confirmado", grande: true)
-            if r.corridasEstimadas > 0 {
-                Text("+ ≈ \(Formato.reais(r.faturamentoEstimado.valor ?? 0)) estimado em \(r.corridasEstimadas) corrida\(r.corridasEstimadas == 1 ? "" : "s") (fora do total)")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+        VStack(alignment: .leading, spacing: Espaco.xs) {
+            RotuloSecao(Self.titulo(turno))
+            Text(Formato.reais(r.faturamentoConfirmado.valor ?? 0))
+                .font(Tipo.destaque)
+                .monospacedDigit()
+                .foregroundStyle(Tema.texto)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text("faturamento confirmado · " + PainelTurno.corridas(r.corridasConfirmadas))
+                .font(Tipo.apoio)
+                .foregroundStyle(Tema.textoSecundario)
+            HStack(spacing: 4) {
+                Text("Após custos registrados:")
+                MedidaTexto(medida: r.resultado) { Formato.reais($0) }
             }
-            Campo("Resultado após custos", r.resultado) { Formato.reais($0) }
-            Campo("R$/hora", r.porHora) { Formato.reais($0) }
-            Campo("R$/km", r.porKm) { Formato.reais($0) }
-            Campo("Distância", r.km) { Formato.km($0) }
-            LabeledContent("Duração", value: Duracao.curta(r.duracao.valor ?? 0))
-        } header: {
-            Text(Self.titulo(turno))
-        } footer: {
-            Text("Só corridas CONFIRMADAS entram no faturamento. Toque num número pra ver de onde ele vem; \"≈\" = estimado, \"—\" = sem dados.")
+            .font(Tipo.apoio)
+            .foregroundStyle(Tema.textoSecundario)
+            .padding(.top, 2)
+        }
+    }
+
+    private func ritmo(_ r: ResumoTurno) -> some View {
+        HStack(alignment: .top, spacing: Espaco.m) {
+            MetricaCompacta(r.porHora, rotulo: "por hora") { Formato.reais($0) }
+            MetricaCompacta(r.porKm, rotulo: "por km") { Formato.reais($0) }
+            MetricaCompacta(r.km, rotulo: "rodados") { Formato.km($0) }
+            MetricaCompacta(valor: Duracao.curta(r.duracao.valor ?? 0), rotulo: "de turno")
+        }
+    }
+
+    @ViewBuilder
+    private func avisos(_ r: ResumoTurno) -> some View {
+        if r.corridasEstimadas > 0 || r.corridasIndeterminadas > 0 || (r.temGPS && r.tempoSemSinalGPS >= 60) {
+            VStack(spacing: Espaco.s) {
+                if r.corridasEstimadas > 0 {
+                    let n = r.corridasEstimadas
+                    Aviso(.estimativa, n == 1 ? "1 corrida não pôde ser confirmada" : "\(n) corridas não puderam ser confirmadas",
+                          impacto: "≈ \(Formato.reais(r.faturamentoEstimado.valor ?? 0)) ficou fora do faturamento confirmado.")
+                }
+                if r.corridasIndeterminadas > 0 {
+                    let n = r.corridasIndeterminadas
+                    Aviso(.informacao, n == 1 ? "1 corrida sem valor identificado" : "\(n) corridas sem valor identificado",
+                          impacto: "Não entram em nenhum total. Toque em Corridas pra ver o motivo de cada uma.")
+                }
+                if r.temGPS && r.tempoSemSinalGPS >= 60 {
+                    Aviso(.atencao, "GPS sem sinal por \(Duracao.curta(r.tempoSemSinalGPS))",
+                          impacto: "Os km desse tempo não foram somados; km e R$/km aparecem como estimados.")
+                }
+            }
         }
     }
 
     private func partes(_ r: ResumoTurno) -> some View {
-        Section {
+        VStack(spacing: 0) {
             NavigationLink { FinanceiroView(r: r) } label: {
-                Rotulo("Financeiro", "dollarsign.circle", Formato.reais(r.faturamentoConfirmado.valor ?? 0))
+                LinhaNavegacao("Financeiro", "dollarsign.circle", Formato.reais(r.faturamentoConfirmado.valor ?? 0))
             }
-            NavigationLink { DistanciaView(r: r) } label: {
-                Rotulo("Distância", "road.lanes", r.km.valor.map(Formato.km) ?? "—")
-            }
-            NavigationLink { TempoView(r: r) } label: {
-                Rotulo("Tempo", "clock", Duracao.curta(r.duracao.valor ?? 0))
-            }
+            Divisoria()
             NavigationLink { CorridasView(r: r) } label: {
-                Rotulo("Corridas", "figure.wave", "\(r.corridasFeitas)" + (r.corridasEstimadas > 0 ? " · \(r.corridasEstimadas) ≈" : ""))
+                LinhaNavegacao("Corridas", "car", "\(r.corridasFeitas)" + (r.corridasEstimadas > 0 ? " · \(r.corridasEstimadas) ≈" : ""))
             }
+            Divisoria()
             NavigationLink { OfertasView(r: r) } label: {
-                Rotulo("Ofertas", "tag", "\(r.ofertas.count)")
+                LinhaNavegacao("Ofertas", "tag", "\(r.ofertas.count)")
             }
             if r.temGPS {
-                NavigationLink { MapaTurnoView(r: r).navigationTitle("Mapa") } label: {
-                    Rotulo("Mapa", "map", "")
+                Divisoria()
+                NavigationLink { MapaTurnoView(r: r).ignoresSafeArea(edges: .bottom).navigationTitle("Mapa") } label: {
+                    LinhaNavegacao("Mapa", "map", r.km.valor.map(Formato.km) ?? "")
                 }
             }
-            NavigationLink { CustosView(r: r) } label: {
-                Rotulo("Abastecimentos e custos", "fuelpump", r.custos.isEmpty ? "" : "\(r.custos.count)")
+            Divisoria()
+            NavigationLink { TempoView(r: r) } label: {
+                LinhaNavegacao("Tempo", "clock", Duracao.curta(r.duracao.valor ?? 0))
             }
+            Divisoria()
+            NavigationLink { DistanciaView(r: r) } label: {
+                LinhaNavegacao("Distância", "road.lanes", r.km.valor.map(Formato.km) ?? "—")
+            }
+            Divisoria()
+            NavigationLink { CustosView(r: r) } label: {
+                LinhaNavegacao("Abastecimentos e custos", "fuelpump", r.custos.isEmpty ? "" : "\(r.custos.count)")
+            }
+            Divisoria()
             NavigationLink {
                 LinhaDoTempoView(store: linha, intervalo: DateInterval(start: turno.inicio, end: turno.fim ?? Date()))
             } label: {
-                Rotulo("Linha do tempo", "list.bullet.rectangle", "")
+                LinhaNavegacao("Linha do tempo técnica", "list.bullet.rectangle")
             }
         }
+        .buttonStyle(.plain)
     }
 
     static func titulo(_ t: Turno) -> String {
@@ -97,26 +152,6 @@ struct Campo: View {
 
     var body: some View {
         LabeledContent(titulo) { MedidaTexto(medida: medida, formatar: formatar) }
-    }
-}
-
-private struct Rotulo: View {
-    let titulo: String
-    let icone: String
-    let valor: String
-
-    init(_ titulo: String, _ icone: String, _ valor: String) {
-        self.titulo = titulo
-        self.icone = icone
-        self.valor = valor
-    }
-
-    var body: some View {
-        LabeledContent {
-            Text(valor).monospacedDigit()
-        } label: {
-            Label(titulo, systemImage: icone)
-        }
     }
 }
 
@@ -221,7 +256,7 @@ private struct CorridasView: View {
                 Text("Nenhuma corrida detectada neste turno.").foregroundStyle(.secondary)
             }
             ForEach(r.corridas.reversed()) { c in
-                NavigationLink { CorridaDetalheView(c: c) } label: { LinhaCorrida(c: c) }
+                NavigationLink { CorridaDetalheView(c: c, r: r) } label: { LinhaCorrida(c: c) }
             }
         }
         .navigationTitle("Corridas")
@@ -249,6 +284,7 @@ struct LinhaCorrida: View {
 
 struct CorridaDetalheView: View {
     let c: CorridaAnalisada
+    var r: ResumoTurno? = nil
 
     var body: some View {
         List {

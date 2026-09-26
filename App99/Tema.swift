@@ -78,6 +78,8 @@ enum Espaco {
     static let xl: CGFloat = 32
     /// Margem lateral das telas.
     static let margem: CGFloat = 20
+    /// Espaço interno dos blocos.
+    static let bloco: CGFloat = 16
 }
 
 enum Raio {
@@ -175,6 +177,19 @@ struct MetricaCompacta: View {
                 .foregroundStyle(Tema.textoSecundario)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Direto de uma Medida: sem valor = "—", estimado = "≈".
+    init(_ medida: Medida, rotulo: String, formatar: (Double) -> String) {
+        self.valor = medida.valor.map(formatar) ?? "—"
+        self.rotulo = rotulo
+        self.confianca = medida.valor == nil ? .indeterminado : medida.confianca
+    }
+
+    init(valor: String, rotulo: String, confianca: Confianca = .confirmado) {
+        self.valor = valor
+        self.rotulo = rotulo
+        self.confianca = confianca
     }
 
     private var valorTexto: String {
@@ -286,39 +301,72 @@ struct EstadoVazio: View {
     }
 }
 
-/// Aviso em linha (erro/atenção/info). Sem caixa pesada: faixa lateral + texto.
+/// Aviso: responde (1) o que aconteceu, (2) se afeta algum número, (3) se precisa fazer algo.
+/// Vermelho só pra problema que pede ação.
 struct Aviso: View {
-    enum Nivel { case info, atencao, erro }
+    enum Nivel { case informacao, atencao, estimativa, problema }
     let nivel: Nivel
-    let texto: String
+    let titulo: String
+    var impacto: String?
+    var acaoTitulo: String?
+    var acao: (() -> Void)?
+
+    init(_ nivel: Nivel, _ titulo: String, impacto: String? = nil,
+         acaoTitulo: String? = nil, acao: (() -> Void)? = nil) {
+        self.nivel = nivel
+        self.titulo = titulo
+        self.impacto = impacto
+        self.acaoTitulo = acaoTitulo
+        self.acao = acao
+    }
 
     private var cor: Color {
         switch nivel {
-        case .info:    return Tema.neutro
-        case .atencao: return Tema.atencao
-        case .erro:    return Tema.erro
+        case .informacao: return Tema.primaria
+        case .atencao:    return Tema.atencao
+        case .estimativa: return Tema.atencao
+        case .problema:   return Tema.erro
         }
     }
 
     private var icone: String {
         switch nivel {
-        case .info:    return "info.circle"
-        case .atencao: return "exclamationmark.triangle"
-        case .erro:    return "xmark.octagon"
+        case .informacao: return "info.circle.fill"
+        case .atencao:    return "exclamationmark.triangle.fill"
+        case .estimativa: return "questionmark.circle.fill"
+        case .problema:   return "exclamationmark.octagon.fill"
         }
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: Espaco.s) {
-            Image(systemName: icone).foregroundStyle(cor)
-            Text(texto)
-                .font(Tipo.apoio)
-                .foregroundStyle(Tema.texto)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: Espaco.m) {
+            Image(systemName: icone)
+                .font(.body)
+                .foregroundStyle(cor)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(titulo)
+                    .font(Tipo.apoio.weight(.semibold))
+                    .foregroundStyle(Tema.texto)
+                if let impacto {
+                    Text(impacto)
+                        .font(Tipo.legenda)
+                        .foregroundStyle(Tema.textoSecundario)
+                }
+                if let acaoTitulo, let acao {
+                    Button(acaoTitulo, action: acao)
+                        .font(Tipo.apoio.weight(.semibold))
+                        .foregroundStyle(nivel == .problema ? Tema.erro : Tema.primaria)
+                        .buttonStyle(.plain)
+                        .padding(.top, 2)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .padding(Espaco.m)
-        .background(cor.opacity(0.12), in: RoundedRectangle(cornerRadius: Raio.botao))
+        .background(cor.opacity(0.10), in: RoundedRectangle(cornerRadius: Raio.botao))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -338,13 +386,13 @@ struct Carregando: View {
     }
 }
 
-/// Bloco com título pra gráficos e grupos densos (Atividade/Análises). Superfície leve, sem sombra.
-struct BlocoGrafico<Conteudo: View>: View {
-    let titulo: String
+/// Bloco de conteúdo (superfície leve, sem borda nem sombra). Título opcional.
+struct Bloco<Conteudo: View>: View {
+    let titulo: String?
     var subtitulo: String?
     let conteudo: Conteudo
 
-    init(_ titulo: String, subtitulo: String? = nil, @ViewBuilder conteudo: () -> Conteudo) {
+    init(_ titulo: String? = nil, subtitulo: String? = nil, @ViewBuilder conteudo: () -> Conteudo) {
         self.titulo = titulo
         self.subtitulo = subtitulo
         self.conteudo = conteudo()
@@ -352,17 +400,117 @@ struct BlocoGrafico<Conteudo: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Espaco.m) {
-            VStack(alignment: .leading, spacing: 2) {
-                RotuloSecao(titulo)
-                if let subtitulo {
-                    Text(subtitulo).font(Tipo.legenda).foregroundStyle(Tema.textoTerciario)
+            if titulo != nil || subtitulo != nil {
+                VStack(alignment: .leading, spacing: 2) {
+                    if let titulo { RotuloSecao(titulo) }
+                    if let subtitulo {
+                        Text(subtitulo).font(Tipo.legenda).foregroundStyle(Tema.textoTerciario)
+                    }
                 }
             }
             conteudo
         }
-        .padding(Espaco.l)
+        .padding(Espaco.bloco)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Tema.superficie, in: RoundedRectangle(cornerRadius: Raio.bloco))
+    }
+}
+
+/// Linha que leva a outra tela: ícone, título, valor e seta.
+struct LinhaNavegacao: View {
+    let titulo: String
+    let icone: String
+    var valor: String = ""
+
+    init(_ titulo: String, _ icone: String, _ valor: String = "") {
+        self.titulo = titulo
+        self.icone = icone
+        self.valor = valor
+    }
+
+    var body: some View {
+        HStack(spacing: Espaco.m) {
+            Image(systemName: icone)
+                .font(.body)
+                .foregroundStyle(Tema.primaria)
+                .frame(width: 24)
+            Text(titulo).font(Tipo.corpo).foregroundStyle(Tema.texto)
+            Spacer(minLength: Espaco.s)
+            Text(valor).font(Tipo.apoio).monospacedDigit().foregroundStyle(Tema.textoSecundario)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(Tema.textoTerciario)
+        }
+        .padding(.vertical, Espaco.m)
+        .contentShape(Rectangle())
+    }
+}
+
+/// Onde foi o tempo: uma barra dividida por estado + legenda.
+struct BarraEstados: View {
+    let tempos: [EstadoMotorista: TimeInterval]
+    static let ordem: [EstadoMotorista] = [.emCorrida, .aCaminho, .aguardando, .pausado, .semLeitura]
+
+    private struct Fatia: Identifiable {
+        let estado: EstadoMotorista
+        let segundos: TimeInterval
+        var id: EstadoMotorista { estado }
+    }
+
+    private var itens: [Fatia] {
+        Self.ordem.compactMap { e in tempos[e].flatMap { $0 >= 30 ? Fatia(estado: e, segundos: $0) : nil } }
+    }
+
+    var body: some View {
+        let lista = itens
+        let total = max(1, lista.reduce(0) { $0 + $1.segundos })
+        VStack(alignment: .leading, spacing: Espaco.m) {
+            GeometryReader { g in
+                let util = g.size.width - CGFloat(max(0, lista.count - 1)) * 2
+                HStack(spacing: 2) {
+                    ForEach(lista) { item in
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(item.estado.cor)
+                            .frame(width: max(3, util * item.segundos / total))
+                    }
+                }
+            }
+            .frame(height: 10)
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                      alignment: .leading, spacing: Espaco.s) {
+                ForEach(lista) { item in
+                    HStack(spacing: 6) {
+                        Circle().fill(item.estado.cor).frame(width: 8, height: 8)
+                        Text(item.estado.nome).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario)
+                        Text(Duracao.curta(item.segundos) + String(format: " · %.0f%%", item.segundos / total * 100))
+                            .font(Tipo.legenda.weight(.medium)).monospacedDigit().foregroundStyle(Tema.texto)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Progresso da meta do dia. Menta só quando atingida.
+struct BarraMeta: View {
+    let valor: Double
+    let meta: Double
+
+    var body: some View {
+        let atingida = valor >= meta
+        VStack(alignment: .leading, spacing: 6) {
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Tema.superficieAlta)
+                    Capsule().fill(atingida ? Tema.positivo : Tema.primaria)
+                        .frame(width: g.size.width * min(1, max(0, valor / meta)))
+                }
+            }
+            .frame(height: 6)
+            Text(atingida ? "Meta do dia atingida · \(Formato.reais(meta))"
+                          : "Hoje: \(Formato.reais(valor)) de \(Formato.reais(meta)) de meta")
+                .font(Tipo.legenda)
+                .foregroundStyle(atingida ? Tema.positivo : Tema.textoSecundario)
+        }
     }
 }
 

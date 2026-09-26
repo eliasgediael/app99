@@ -8,7 +8,7 @@ struct CatalogoTemaView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Espaco.xl) {
-                Aviso(nivel: .info, texto: "Exemplo visual. Nenhum número desta tela é seu nem é salvo.")
+                Aviso(.informacao, "Exemplo visual", impacto: "Nenhum número desta tela é seu nem é salvo.")
 
                 // Hierarquia: 1 número forte, secundárias, estado, ação
                 VStack(alignment: .leading, spacing: Espaco.l) {
@@ -71,16 +71,24 @@ struct CatalogoTemaView: View {
                     }
                 }
 
-                BlocoGrafico("Bloco denso", subtitulo: "Atividade e Análises usam este") {
-                    Text("Gráficos e grupos entram aqui.")
-                        .font(Tipo.apoio)
-                        .foregroundStyle(Tema.textoSecundario)
+                Bloco("Onde foi o tempo", subtitulo: "exemplo") {
+                    BarraEstados(tempos: [.emCorrida: 5400, .aCaminho: 1500, .aguardando: 2700, .pausado: 600])
+                }
+
+                Bloco("Meta") {
+                    BarraMeta(valor: 96.4, meta: 150)
+                }
+
+                Bloco("Navegação") {
+                    LinhaNavegacao("Financeiro", "dollarsign.circle", "R$ 96,40")
                 }
 
                 VStack(alignment: .leading, spacing: Espaco.m) {
                     CabecalhoSecao("Avisos")
-                    Aviso(nivel: .atencao, texto: "GPS sem sinal: esse trecho não entra nos km.")
-                    Aviso(nivel: .erro, texto: "Sem permissão de localização.")
+                    Aviso(.atencao, "GPS sem sinal há 3 min", impacto: "Os km deste trecho não entram na conta.")
+                    Aviso(.estimativa, "1 corrida ainda não pôde ser confirmada", impacto: "≈ R$ 6,80 fica fora do faturamento.")
+                    Aviso(.problema, "Sem permissão de localização", impacto: "Km e R$/km ficam em branco.",
+                          acaoTitulo: "Abrir Ajustes") {}
                     Carregando(texto: "Lendo o turno…")
                 }
 

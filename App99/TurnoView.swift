@@ -1,12 +1,15 @@
 import SwiftUI
 
-/// Topo da tela inicial: sem turno → botão "Iniciar turno"; com turno → painel de bordo.
-/// Poucos números, os mais importantes grandes; detalhes no resumo.
+/// Aba Turno: painel de operação.
+/// Sem turno → iniciar. Com turno, nesta ordem: o que está acontecendo, quanto fiz, ritmo,
+/// a última corrida, avisos (só quando existem) e as ações. Detalhes ficam no resumo.
 struct PainelTurno: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared
     @ObservedObject var monitor: MonitorExtensao
     @ObservedObject var gps = Localizacao.shared
+    @ObservedObject var nav = Navegacao.shared
+    @AppStorage("metaDiaria") private var metaDiaria = 0.0
 
     @State private var seletor = SeletorTransmissao()
     @State private var confirmarEncerrar = false
@@ -14,153 +17,274 @@ struct PainelTurno: View {
     @State private var abastecendo = false
 
     var body: some View {
-        Section {
-            if let t = turnos.atual {
-                TimelineView(.periodic(from: .now, by: 30)) { contexto in
-                    painel(t, resumo: turnos.resumo(t, agora: contexto.date))
+        ScrollView {
+            Group {
+                if let t = turnos.atual {
+                    TimelineView(.periodic(from: .now, by: 30)) { contexto in
+                        painel(t, resumo: turnos.resumo(t, agora: contexto.date), agora: contexto.date)
+                    }
+                } else {
+                    semTurno
                 }
-            } else {
-                semTurno
             }
+            .padding(.horizontal, Espaco.margem)
+            .padding(.top, Espaco.s)
+            .padding(.bottom, Espaco.xl)
         }
+        .background(Tema.fundo.ignoresSafeArea())
+        .background(SeletorView(picker: seletor.picker).frame(width: 1, height: 1).opacity(0.01))
         .sheet(item: $resumoAberto) { t in
             NavigationStack { ResumoTurnoView(turno: t) }
         }
         .sheet(isPresented: $abastecendo) {
             NavigationStack { AbastecimentoView() }
         }
+        .onChange(of: nav.aba) { _ in resumoAberto = nil }   // "ver no mapa" de dentro do resumo
     }
 
     // MARK: Sem turno
 
     private var semTurno: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Espaco.xl) {
+            VStack(alignment: .leading, spacing: Espaco.s) {
+                PontoEstado(texto: "Sem turno", cor: Tema.textoTerciario)
+                Text("Turno não iniciado")
+                    .font(.title.bold())
+                    .foregroundStyle(Tema.texto)
+                Text("Ao iniciar, o Apex liga a leitura da tela e o GPS e passa a medir faturamento, km e tempo.")
+                    .font(Tipo.apoio)
+                    .foregroundStyle(Tema.textoSecundario)
+            }
+
+            VStack(spacing: Espaco.m) {
+                Button {
+                    turnos.iniciar()
+                    seletor.abrir()   // o iOS ainda pede o toque em "Iniciar Transmissão"
+                } label: {
+                    Label("Iniciar turno", systemImage: "play.fill")
+                }
+                .buttonStyle(BotaoPrimario())
+                Button { abastecendo = true } label: {
+                    Label("Registrar abastecimento", systemImage: "fuelpump")
+                }
+                .buttonStyle(BotaoSecundario())
+            }
+
+            if metaDiaria > 0 {
+                Bloco("Meta do dia") { BarraMeta(valor: confirmadoHoje, meta: metaDiaria) }
+            }
+
             if let u = turnos.ultimoEncerrado {
                 let r = turnos.resumo(u)
-                Button { resumoAberto = u } label: {
-                    HStack {
-                        NumeroDestaque(valor: Formato.reais(r.faturamentoConfirmado.valor ?? 0),
-                                       rotulo: "último turno · \(Datas.curta(u.inicio)) · \(Duracao.curta(r.duracao.valor ?? 0))")
-                        Spacer()
-                        Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                NavigationLink { ResumoTurnoView(turno: u) } label: {
+                    Bloco("Último turno") {
+                        HStack(alignment: .center) {
+                            VStack(alignment: .leading, spacing: Espaco.xs) {
+                                Text(Formato.reais(r.faturamentoConfirmado.valor ?? 0))
+                                    .font(Tipo.metrica)
+                                    .monospacedDigit()
+                                    .foregroundStyle(Tema.texto)
+                                Text("\(ResumoTurnoView.titulo(u)) · \(Duracao.curta(r.duracao.valor ?? 0))")
+                                    .font(Tipo.legenda)
+                                    .foregroundStyle(Tema.textoSecundario)
+                                Text(([Self.corridas(r.corridasConfirmadas),
+                                       r.porHora.valor.map { Formato.reais($0) + "/h" }] as [String?])
+                                    .compactMap { $0 }.joined(separator: " · "))
+                                    .font(Tipo.legenda)
+                                    .foregroundStyle(Tema.textoSecundario)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Tema.textoTerciario)
+                        }
                     }
                 }
                 .buttonStyle(.plain)
             }
-            Button {
-                turnos.iniciar()
-                seletor.abrir()   // o iOS ainda pede o toque em "Iniciar Transmissão"
-            } label: {
-                Label("Iniciar turno", systemImage: "play.fill")
-            }
-            .buttonStyle(BotaoGrande())
-            Button { abastecendo = true } label: {
-                Label("Abastecimento", systemImage: "fuelpump")
-            }
-            .font(.subheadline)
         }
-        .padding(.vertical, 6)
-        .background(SeletorView(picker: seletor.picker).frame(width: 1, height: 1).opacity(0.01))
     }
 
     // MARK: Turno ativo
 
-    private func painel(_ t: Turno, resumo r: ResumoTurno) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func painel(_ t: Turno, resumo r: ResumoTurno, agora: Date) -> some View {
+        let estado = t.pausadoAgora ? EstadoMotorista.pausado : (r.segmentos.last?.estado ?? .semLeitura)
+        let desde = r.segmentos.last?.inicio ?? t.inicio
+        let avisos = avisos(r)
+
+        return VStack(alignment: .leading, spacing: Espaco.xl) {
+            // 1. O que está acontecendo
             HStack {
-                Text(t.pausadoAgora ? "TURNO PAUSADO" : "TURNO ATIVO")
-                    .font(.caption.bold())
-                    .foregroundStyle(t.pausadoAgora ? Color.orange : Color.green)
+                PontoEstado(texto: "\(estado.nome) · há \(Duracao.curta(agora.timeIntervalSince(desde)))", cor: estado.cor)
                 Spacer()
                 indicador("Leitura", ligado: monitor.ligada)
                 indicador("GPS", ligado: gps.estado == .ativo)
             }
 
-            NumeroDestaque(valor: Formato.reais(r.faturamentoConfirmado.valor ?? 0),
-                           rotulo: "faturamento confirmado", grande: true)
-
-            HStack(alignment: .top) {
-                medida(r.porHora, "R$/hora") { Formato.reais($0) }
-                Spacer()
-                medida(r.porKm, "R$/km") { Formato.reais($0) }
-            }
-            HStack(alignment: .top) {
-                NumeroDestaque(valor: Duracao.curta(r.duracao.valor ?? 0), rotulo: "de turno")
-                Spacer()
-                medida(r.km, "km") { Formato.km($0) }
-            }
-
-            HStack {
-                Etiqueta(texto: (r.segmentos.last?.estado ?? .semLeitura).nome.uppercased(),
-                         cor: corEstado(r.segmentos.last?.estado ?? .semLeitura))
-                Spacer()
-                Text("\(r.corridasFeitas) corridas · \(Duracao.curta(r.tempoPorEstado[.aguardando] ?? 0)) aguardando")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if gps.estado == .semPermissao || gps.estado == .semSinal {
-                Text(gps.estado == .semPermissao
-                     ? "Sem permissão de localização: km e R$/km ficam em branco. Ative em Ajustes → Apex → Localização."
-                     : "GPS sem sinal: esse trecho não entra nos km.")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-            if r.corridasEstimadas > 0 {
-                Text("+ \(r.corridasEstimadas) estimada\(r.corridasEstimadas == 1 ? "" : "s") (≈ \(Formato.reais(r.faturamentoEstimado.valor ?? 0))) fora do total")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
-
-            HStack(spacing: 10) {
-                Button(t.pausadoAgora ? "Retomar" : "Pausar") {
-                    t.pausadoAgora ? turnos.retomar() : turnos.pausar()
-                }
-                .buttonStyle(BotaoGrande(cor: .gray))
-                Button("Encerrar") { confirmarEncerrar = true }
-                    .buttonStyle(BotaoGrande(cor: .red))
-            }
-            .confirmationDialog("Encerrar o turno?", isPresented: $confirmarEncerrar, titleVisibility: .visible) {
-                Button("Encerrar turno", role: .destructive) {
-                    SinalApp.encerrarLeitura.enviar()
-                    resumoAberto = turnos.encerrar()
+            // 2. Quanto fiz
+            VStack(alignment: .leading, spacing: Espaco.xs) {
+                Text(Formato.reais(r.faturamentoConfirmado.valor ?? 0))
+                    .font(Tipo.destaque)
+                    .monospacedDigit()
+                    .foregroundStyle(Tema.texto)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text("faturamento confirmado · " + Self.corridas(r.corridasConfirmadas))
+                    .font(Tipo.apoio)
+                    .foregroundStyle(Tema.textoSecundario)
+                if metaDiaria > 0 {
+                    BarraMeta(valor: confirmadoHoje, meta: metaDiaria).padding(.top, Espaco.s)
                 }
             }
 
-            HStack {
-                Button { abastecendo = true } label: { Label("Abastecimento", systemImage: "fuelpump") }
-                Spacer()
-                if !monitor.ligada {
-                    Button { seletor.abrir() } label: { Label("Ligar leitura", systemImage: "record.circle") }
+            // 3. Ritmo
+            HStack(alignment: .top, spacing: Espaco.m) {
+                MetricaCompacta(r.porHora, rotulo: "por hora") { Formato.reais($0) }
+                MetricaCompacta(r.porKm, rotulo: "por km") { Formato.reais($0) }
+                MetricaCompacta(r.km, rotulo: "rodados") { Formato.km($0) }
+                MetricaCompacta(valor: Duracao.curta(r.duracao.valor ?? 0), rotulo: "de turno")
+            }
+
+            // 4. Agora e a última corrida
+            corridaAtual(r)
+
+            // 5. Avisos (só quando existem)
+            if !avisos.isEmpty {
+                VStack(spacing: Espaco.s) {
+                    ForEach(avisos.indices, id: \.self) { avisos[$0] }
                 }
             }
-            .font(.subheadline)
+
+            // 6. Ações
+            VStack(spacing: Espaco.m) {
+                HStack(spacing: Espaco.m) {
+                    Button {
+                        t.pausadoAgora ? turnos.retomar() : turnos.pausar()
+                    } label: {
+                        Label(t.pausadoAgora ? "Retomar" : "Pausar", systemImage: t.pausadoAgora ? "play.fill" : "pause.fill")
+                    }
+                    .buttonStyle(BotaoSecundario())
+                    Button { abastecendo = true } label: {
+                        Label("Abastecer", systemImage: "fuelpump")
+                    }
+                    .buttonStyle(BotaoSecundario())
+                }
+                HStack {
+                    Button("Encerrar turno", role: .destructive) { confirmarEncerrar = true }
+                        .font(.headline)
+                        .foregroundStyle(Tema.erro)
+                    Spacer()
+                    NavigationLink { ResumoTurnoView(turno: t) } label: {
+                        HStack(spacing: 4) {
+                            Text("Resumo do turno")
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                        }
+                        .font(Tipo.apoio.weight(.medium))
+                        .foregroundStyle(Tema.primaria)
+                    }
+                }
+                .padding(.top, Espaco.xs)
+                .confirmationDialog("Encerrar o turno?", isPresented: $confirmarEncerrar, titleVisibility: .visible) {
+                    Button("Encerrar turno", role: .destructive) {
+                        SinalApp.encerrarLeitura.enviar()
+                        resumoAberto = turnos.encerrar()
+                    }
+                } message: {
+                    Text("A leitura da tela e o GPS param, e o resumo do turno abre em seguida.")
+                }
+            }
         }
-        .padding(.vertical, 6)
-        .background(SeletorView(picker: seletor.picker).frame(width: 1, height: 1).opacity(0.01))
     }
 
-    private func medida(_ m: Medida, _ rotulo: String, _ f: @escaping (Double) -> String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            MedidaTexto(medida: m, formatar: f).font(.title3.bold())
-            Text(rotulo).font(.caption).foregroundStyle(.secondary)
+    /// Corrida em andamento (valor ainda não confirmado) e a última corrida encerrada.
+    @ViewBuilder
+    private func corridaAtual(_ r: ResumoTurno) -> some View {
+        let aberta = r.corridas.last { $0.confianca == nil && $0.estado != .cancelada }
+        let ultima = r.corridas.last { $0.confianca != nil && $0.estado != .cancelada }
+        if aberta != nil || ultima != nil {
+            Bloco {
+                VStack(alignment: .leading, spacing: Espaco.m) {
+                    if let c = aberta {
+                        VStack(alignment: .leading, spacing: 2) {
+                            RotuloSecao(c.aBordoEm == nil ? "Indo buscar" : "Em corrida")
+                            Text(([c.aceiteEm.map { "aceita às " + Self.hora($0) },
+                                   c.valorOfertaCent.map { "oferta de " + Formato.reais(Double($0) / 100) + " · a confirmar" }] as [String?])
+                                .compactMap { $0 }.joined(separator: " · "))
+                                .font(Tipo.apoio)
+                                .foregroundStyle(Tema.textoSecundario)
+                        }
+                        if ultima != nil { Divisoria() }
+                    }
+                    if let c = ultima {
+                        VStack(alignment: .leading, spacing: Espaco.xs) {
+                            RotuloSecao("Última corrida")
+                            NavigationLink { CorridaDetalheView(c: c, r: r) } label: {
+                                LinhaCorrida(c: c)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    /// Cada aviso diz o que aconteceu, se mexe em algum número e o que fazer.
+    private func avisos(_ r: ResumoTurno) -> [Aviso] {
+        var lista: [Aviso] = []
+        switch gps.estado {
+        case .semPermissao:
+            lista.append(Aviso(.problema, "Sem permissão de localização",
+                               impacto: "Km, R$/km e o mapa ficam em branco neste turno.",
+                               acaoTitulo: "Abrir Ajustes do iPhone") {
+                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+            })
+        case .semSinal:
+            lista.append(Aviso(.atencao, "GPS sem sinal",
+                               impacto: "Os km deste trecho não entram na conta. Não precisa fazer nada."))
+        default: break
+        }
+        if !monitor.ligada {
+            lista.append(Aviso(.atencao, "Sem sinal da leitura da tela",
+                               impacto: "Se ela estiver desligada, ofertas e corridas deste período não são registradas.",
+                               acaoTitulo: "Ligar leitura") { seletor.abrir() })
+        }
+        if r.corridasEstimadas > 0 {
+            let n = r.corridasEstimadas
+            lista.append(Aviso(.estimativa,
+                               n == 1 ? "1 corrida ainda não pôde ser confirmada" : "\(n) corridas ainda não puderam ser confirmadas",
+                               impacto: "≈ \(Formato.reais(r.faturamentoEstimado.valor ?? 0)) fica fora do faturamento confirmado."))
+        }
+        if r.corridasIndeterminadas > 0 {
+            let n = r.corridasIndeterminadas
+            lista.append(Aviso(.informacao,
+                               n == 1 ? "1 corrida sem valor identificado" : "\(n) corridas sem valor identificado",
+                               impacto: "Não entram em nenhum total. O motivo está no detalhe de cada uma, em Viagens."))
+        }
+        return lista
+    }
+
+    /// Faturamento confirmado dos turnos de hoje (inclui o ativo, mesmo que tenha começado ontem).
+    private var confirmadoHoje: Double {
+        var lista = Historico.turnos(turnos.turnos, em: .hoje)
+        if let a = turnos.atual, !lista.contains(where: { $0.id == a.id }) { lista.append(a) }
+        return lista.reduce(0) { $0 + (turnos.resumo($1).faturamentoConfirmado.valor ?? 0) }
     }
 
     private func indicador(_ nome: String, ligado: Bool) -> some View {
         HStack(spacing: 4) {
-            Circle().fill(ligado ? Color.green : Color.gray).frame(width: 7, height: 7)
-            Text(nome).font(.caption2).foregroundStyle(.secondary)
+            Circle().fill(ligado ? Tema.positivo : Tema.textoTerciario).frame(width: 7, height: 7)
+            Text(nome).font(.caption2).foregroundStyle(Tema.textoSecundario)
         }
+        .accessibilityLabel("\(nome) \(ligado ? "ligado" : "desligado")")
     }
 
-    private func corEstado(_ e: EstadoMotorista) -> Color {
-        switch e {
-        case .emCorrida:  return .green
-        case .aCaminho:   return .blue
-        case .aguardando: return .secondary
-        case .pausado:    return .orange
-        case .semLeitura: return .gray
-        }
+    static func corridas(_ n: Int) -> String {
+        n == 1 ? "1 corrida" : "\(n) corridas"
+    }
+
+    static func hora(_ d: Date) -> String {
+        d.formatted(date: .omitted, time: .shortened)
     }
 }
 
@@ -171,7 +295,10 @@ struct AbastecimentoView: View {
     @Environment(\.dismiss) private var fechar
 
     @State private var valor: Double?
-    @State private var precoLitro: Double?
+    @State private var precoLitro: Double? = {
+        let padrao = UserDefaults.standard.double(forKey: "precoLitroPadrao")
+        return padrao > 0 ? padrao : nil
+    }()
     @State private var informarLitros = false
     @State private var litrosDigitados: Double?
     @State private var em = Date()
@@ -232,6 +359,10 @@ struct AbastecimentoView: View {
             ?? (informarLitros ? litrosDigitados.flatMap { $0 > 0 ? Int((v / $0 * 1000).rounded()) : nil } : nil)
         c.posto = posto.isEmpty ? nil : posto
         c.observacao = observacao.isEmpty ? nil : observacao
+        // Onde abasteceu: só se o GPS do turno tinha um ponto de até 5 min antes/depois (nunca inventado)
+        if let p = TurnoStore.shared.pontosAtuais.last, abs(p.em.timeIntervalSince(em)) <= 300 {
+            c.local = p.coord
+        }
         TurnoStore.shared.registrar(c)
         fechar()
     }
