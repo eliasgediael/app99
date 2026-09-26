@@ -27,6 +27,8 @@ targets:
       path: App99/Info.plist
       properties:
         CFBundleDisplayName: Apex
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
@@ -62,6 +64,8 @@ targets:
       path: Broadcast/Info.plist
       properties:
         CFBundleDisplayName: Apex
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.broadcast-services-upload
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
