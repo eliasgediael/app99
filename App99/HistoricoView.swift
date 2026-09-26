@@ -115,135 +115,282 @@ struct ResumoAgregado {
 
 // MARK: - Tela
 
+/// Aba Análises: o período em profundidade. Financeiro → tempo → horários → dias → regiões → rotas →
+/// o que aconteceu depois → turnos. Cada grupo diz quantos casos tem; nada de "bom" ou "ruim".
 struct HistoricoView: View {
     @ObservedObject var turnos = TurnoStore.shared
     @ObservedObject var linha = LinhaDoTempoStore.shared
+    @ObservedObject var nomes = NomesRegioes.shared
     @State private var periodo: Periodo = .ultimos7
     var titulo = "Histórico"
 
     var body: some View {
         let lista = Historico.turnos(turnos.turnos, em: periodo).sorted { $0.inicio > $1.inicio }
         let a = ResumoAgregado(resumos: lista.map { turnos.resumo($0) })
-        List {
-            HistoricoCurto()
-            Section {
-                Picker("Período", selection: $periodo) {
-                    ForEach(Periodo.allCases, id: \.self) { Text($0.nome).tag($0) }
+        ScrollView {
+            VStack(alignment: .leading, spacing: Espaco.xl) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: Espaco.s) {
+                        ForEach(Periodo.allCases, id: \.self) { p in
+                            ChipFiltro(titulo: p.nome, ativo: periodo == p) { periodo = p }
+                        }
+                    }
+                    .padding(.horizontal, Espaco.margem)
+                }
+                .padding(.horizontal, -Espaco.margem)
+
+                if lista.isEmpty {
+                    EstadoVazio(icone: "chart.bar", titulo: "Nenhum turno neste período",
+                                texto: "Escolha outro período ou rode um turno: as análises saem só dos seus dados.")
+                } else {
+                    financeiro(a)
+                    tempo(a)
+                    horarios(a)
+                    if periodo != .hoje && periodo != .ontem { dias(a) }
+                    regioes(a)
+                    rotas(a)
+                    depois(a)
+                    turnosLista(lista)
                 }
             }
-            if lista.isEmpty {
-                Text("Nenhum turno neste período.").foregroundStyle(.secondary)
-            } else {
-                principais(a)
-                tempo(a)
-                faixas(a)
-                if periodo != .hoje && periodo != .ontem { diasDaSemana(a) }
-                regioes(a)
-                turnosLista(lista)
-            }
+            .padding(.horizontal, Espaco.margem)
+            .padding(.vertical, Espaco.l)
         }
+        .background(Tema.fundo.ignoresSafeArea())
         .navigationTitle(titulo)
     }
 
-    private func principais(_ a: ResumoAgregado) -> some View {
-        Section {
-            NumeroDestaque(valor: Formato.reais(a.confirmado), rotulo: "faturamento confirmado", grande: true)
-            if a.corridasEstimadas > 0 {
-                Text("+ ≈ \(Formato.reais(a.estimado)) estimado (\(a.corridasEstimadas) corridas, fora do total)")
-                    .font(.caption).foregroundStyle(.orange)
+    // MARK: Financeiro
+
+    private func financeiro(_ a: ResumoAgregado) -> some View {
+        VStack(alignment: .leading, spacing: Espaco.l) {
+            VStack(alignment: .leading, spacing: Espaco.xs) {
+                RotuloSecao("Financeiro")
+                Text(Formato.reais(a.confirmado))
+                    .font(Tipo.destaque)
+                    .monospacedDigit()
+                    .foregroundStyle(Tema.texto)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(Self.subtituloFinanceiro(a))
+                    .font(Tipo.apoio)
+                    .foregroundStyle(Tema.textoSecundario)
             }
-            Campo("Resultado após custos", a.resultado) { Formato.reais($0) }
-            Campo("R$/hora", a.porHora) { Formato.reais($0) }
-            Campo("R$/km", a.porKm) { Formato.reais($0) }
-            Campo("Distância", a.km) { Formato.km($0) }
-            LabeledContent("Tempo de turno", value: Duracao.curta(a.duracao))
-            LabeledContent("Corridas", value: "\(a.corridasFeitas)" + (a.corridasEstimadas > 0 ? " (\(a.corridasEstimadas) ≈)" : ""))
-            LabeledContent("Ofertas aceitas", value: "\(a.ofertasAceitas) de \(a.ofertas)")
-            LabeledContent("Turnos", value: "\(a.turnos)")
+            HStack(alignment: .top, spacing: Espaco.m) {
+                MetricaCompacta(a.resultado, rotulo: "após custos") { Formato.reais($0) }
+                MetricaCompacta(a.porHora, rotulo: "por hora") { Formato.reais($0) }
+                MetricaCompacta(a.porKm, rotulo: "por km") { Formato.reais($0) }
+                MetricaCompacta(a.km, rotulo: "rodados") { Formato.km($0) }
+            }
+            if a.corridasEstimadas > 0 {
+                Aviso(.estimativa, Self.tituloEstimadas(a.corridasEstimadas),
+                      impacto: "≈ " + Formato.reais(a.estimado) + " fica fora do faturamento confirmado.")
+            }
+            Text("Ofertas: \(a.ofertasAceitas) aceitas de \(a.ofertas). \"Após custos\" desconta abastecimentos e custos registrados.")
+                .font(Tipo.legenda)
+                .foregroundStyle(Tema.textoTerciario)
         }
     }
 
+    private static func subtituloFinanceiro(_ a: ResumoAgregado) -> String {
+        let turnos = a.turnos == 1 ? "1 turno" : "\(a.turnos) turnos"
+        return "faturamento confirmado · " + PainelTurno.corridas(a.corridasConfirmadas) + " · " + turnos
+    }
+
+    private static func tituloEstimadas(_ n: Int) -> String {
+        n == 1 ? "1 corrida estimada no período" : "\(n) corridas estimadas no período"
+    }
+
+    // MARK: Tempo
+
     private func tempo(_ a: ResumoAgregado) -> some View {
-        Section("Onde foi o tempo") {
-            ForEach(EstadoMotorista.allCases, id: \.self) { e in
-                if let s = a.tempoPorEstado[e], s >= 60 {
-                    LabeledContent(e.nome) {
-                        Text(Duracao.curta(s) + (a.duracao > 0 ? String(format: "  %.0f%%", s / a.duracao * 100) : ""))
-                            .monospacedDigit()
+        Bloco("Tempo", subtitulo: "\(Duracao.curta(a.duracao)) de turno") {
+            BarraEstados(tempos: a.tempoPorEstado)
+            if let p = a.tempoParado {
+                LinhaMetrica("Parado (GPS)", Duracao.curta(p))
+            }
+        }
+    }
+
+    // MARK: Horários
+
+    @ViewBuilder
+    private func horarios(_ a: ResumoAgregado) -> some View {
+        let horas = a.horasDoDia
+        if !horas.isEmpty {
+            Bloco("Horários", subtitulo: "soma do período por hora do dia · corrida conta na hora em que terminou") {
+                GraficoHoras(horas: horas, porHoraDoDia: true)
+                VStack(spacing: 0) {
+                    ForEach(horas) { h in
+                        LinhaHora(h: h)
+                        if h.id != horas.last?.id { Divisoria() }
                     }
                 }
             }
         }
     }
 
-    private func faixas(_ a: ResumoAgregado) -> some View {
-        Section {
-            ForEach(a.grupos(.faixaHoraria)) { g in grupo(g.id + "h", g) }
-        } header: {
-            Text("Por horário")
-        } footer: {
-            Text("R$/h = faturamento confirmado das corridas que terminaram na faixa ÷ horas de turno nela. \"poucos dados\" = menos de 3 corridas.")
+    // MARK: Dias da semana
+
+    @ViewBuilder
+    private func dias(_ a: ResumoAgregado) -> some View {
+        let ds = a.diasDaSemana
+        if !ds.isEmpty {
+            let maior = max(1, ds.map(\.faturamento).max() ?? 1)
+            Bloco("Dias da semana", subtitulo: "pelo dia em que o turno começou") {
+                VStack(spacing: Espaco.m) {
+                    ForEach(ds) { d in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(d.nome.capitalized).font(Tipo.apoio.weight(.semibold)).frame(width: 44, alignment: .leading)
+                                Text(Formato.reais(d.faturamento)).font(Tipo.apoio.weight(.semibold)).monospacedDigit()
+                                Spacer()
+                                Text(Self.textoDia(d)).font(Tipo.legenda).monospacedDigit().foregroundStyle(Tema.textoSecundario)
+                            }
+                            GeometryReader { g in
+                                Capsule().fill(Tema.primaria.opacity(0.7))
+                                    .frame(width: max(4, g.size.width * d.faturamento / maior))
+                            }
+                            .frame(height: 5)
+                        }
+                    }
+                }
+            }
         }
     }
 
-    private func diasDaSemana(_ a: ResumoAgregado) -> some View {
-        Section("Por dia da semana") {
-            ForEach(a.grupos(.diaDaSemana)) { g in grupo(g.id, g) }
-        }
+    private static func textoDia(_ d: ResumoAgregado.DiaSemana) -> String {
+        var p = ["\(d.datas.count) dia\(d.datas.count == 1 ? "" : "s")", PainelTurno.corridas(d.corridas)]
+        if let ph = d.porHora { p.append(Formato.reais(ph) + "/h") }
+        if d.poucosDados { p.append("poucos dados") }
+        return p.joined(separator: " · ")
     }
+
+    // MARK: Regiões
 
     @ViewBuilder
     private func regioes(_ a: ResumoAgregado) -> some View {
         let rs = a.regioes()
-        if !rs.isEmpty {
-            Section {
-                ForEach(rs.prefix(8)) { g in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text("Região \(g.id)").font(.subheadline.bold())
+        Bloco("Regiões de embarque", subtitulo: "células de ~1 km onde os passageiros embarcaram (GPS)") {
+            if rs.isEmpty {
+                Text("Sem embarques com GPS neste período.").font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+            } else {
+                if !nomes.ativo { avisoNomes }
+                VStack(spacing: 0) {
+                    ForEach(rs.prefix(8)) { g in
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(nomes.rotulo(g.id)).font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.texto)
+                                Text(([PainelTurno.corridas(g.corridas),
+                                       g.km > 0 ? Formato.km(g.km) : nil,
+                                       g.porKm.map { Formato.reais($0) + "/km" },
+                                       g.poucosDados ? "poucos dados" : nil] as [String?])
+                                    .compactMap { $0 }.joined(separator: " · "))
+                                    .font(Tipo.legenda).monospacedDigit().foregroundStyle(Tema.textoSecundario)
+                            }
                             Spacer()
-                            Text(Formato.reais(g.faturamento)).monospacedDigit()
+                            Text(Formato.reais(g.faturamento)).font(Tipo.apoio).monospacedDigit().foregroundStyle(Tema.texto)
                         }
-                        Text("\(g.corridas) corrida\(g.corridas == 1 ? "" : "s")"
-                             + (g.porKm.map { " · " + Formato.reais($0) + "/km" } ?? "")
-                             + (g.poucosDados ? " · poucos dados" : ""))
-                            .font(.caption).foregroundStyle(.secondary)
+                        .padding(.vertical, Espaco.s)
+                        if g.id != rs.prefix(8).last?.id { Divisoria() }
                     }
                 }
-            } header: {
-                Text("Regiões de embarque")
-            } footer: {
-                Text("Células de ~1 km onde os passageiros embarcaram, pelo seu GPS. Só corridas confirmadas.")
             }
         }
     }
+
+    private var avisoNomes: some View {
+        Aviso(.informacao, "Regiões aparecem por código",
+              impacto: "Você pode ativar nomes de bairros em Perfil → Privacidade. Para isso, o centro aproximado de cada região é enviado à Apple.",
+              acaoTitulo: "Abrir Perfil") { Navegacao.shared.perfilAberto = true }
+    }
+
+    // MARK: Rotas
+
+    @ViewBuilder
+    private func rotas(_ a: ResumoAgregado) -> some View {
+        let rs = a.rotas
+        Bloco("Rotas", subtitulo: "região do embarque → região do desembarque") {
+            if rs.isEmpty {
+                Text("Nenhuma corrida com GPS no embarque e na tela de fim neste período.")
+                    .font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(rs.prefix(8)) { r in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("\(nomes.rotulo(r.origem)) → \(nomes.rotulo(r.destino))")
+                                    .font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.texto)
+                                    .lineLimit(2)
+                                Spacer()
+                                Text("\(r.corridas)×").font(Tipo.apoio).monospacedDigit().foregroundStyle(Tema.textoSecundario)
+                            }
+                            Text(Self.textoRota(r)).font(Tipo.legenda).monospacedDigit().foregroundStyle(Tema.textoSecundario)
+                        }
+                        .padding(.vertical, Espaco.s)
+                        if r.id != rs.prefix(8).last?.id { Divisoria() }
+                    }
+                }
+            }
+        }
+    }
+
+    private static func textoRota(_ r: ResumoAgregado.Rota) -> String {
+        var p: [String] = []
+        if r.confirmadas > 0 { p.append(Formato.reais(r.faturamento) + " confirmado") }
+        if r.km > 0 { p.append(Formato.km(r.km)) }
+        if r.comContinuacao > 0 { p.append("\(r.novaEmAte10) de \(r.comContinuacao) com nova corrida em até 10 min") }
+        return p.joined(separator: " · ")
+    }
+
+    // MARK: O que aconteceu depois
+
+    @ViewBuilder
+    private func depois(_ a: ResumoAgregado) -> some View {
+        let ds = a.depoisDoDesembarque.filter { $0.casos > 0 }
+        Bloco("O que aconteceu depois", subtitulo: "depois de desembarcar em cada região") {
+            if ds.isEmpty {
+                Text("Precisa de corridas com a tela de fim e o GPS registrados.")
+                    .font(Tipo.apoio).foregroundStyle(Tema.textoSecundario)
+            } else {
+                VStack(alignment: .leading, spacing: Espaco.m) {
+                    ForEach(ds.prefix(6)) { d in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(nomes.rotulo(d.regiao)).font(Tipo.apoio.weight(.semibold)).foregroundStyle(Tema.texto)
+                            Text(Self.textoDepois(d)).font(Tipo.legenda).foregroundStyle(Tema.textoSecundario)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Text("Só descreve o que aconteceu com você nesses casos. Não é previsão.")
+                        .font(Tipo.legenda).foregroundStyle(Tema.textoTerciario)
+                }
+            }
+        }
+    }
+
+    private static func textoDepois(_ d: ResumoAgregado.Depois) -> String {
+        var t = "Depois de \(d.casos) desembarque\(d.casos == 1 ? "" : "s") aqui: \(d.novaEmAte10) tiveram nova corrida em até 10 min"
+            + " e \(d.maisDe10) ficaram mais de 10 min sem corrida."
+        if let m = d.mediana { t += " Espera típica: \(Duracao.curta(m))." }
+        if d.turnoAcabou > 0 { t += " (\(d.turnoAcabou) no fim do turno, fora da conta.)" }
+        if d.poucosDados { t += " Poucos dados." }
+        return t
+    }
+
+    // MARK: Turnos
 
     private func turnosLista(_ lista: [Turno]) -> some View {
-        Section("Turnos") {
-            ForEach(lista) { t in
-                NavigationLink {
-                    ResumoTurnoView(turno: t)
-                } label: {
-                    let r = turnos.resumo(t)
-                    LabeledContent(ResumoTurnoView.titulo(t)) {
-                        Text(Formato.reais(r.faturamentoConfirmado.valor ?? 0)).monospacedDigit()
+        Bloco("Turnos") {
+            VStack(spacing: 0) {
+                ForEach(lista) { t in
+                    NavigationLink { ResumoTurnoView(turno: t) } label: {
+                        let r = turnos.resumo(t)
+                        LinhaNavegacao(ResumoTurnoView.titulo(t), "flag", Formato.reais(r.faturamentoConfirmado.valor ?? 0))
                     }
+                    .buttonStyle(.plain)
+                    if t.id != lista.last?.id { Divisoria() }
                 }
             }
-        }
-    }
-
-    private func grupo(_ nome: String, _ g: ResumoAgregado.Grupo) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack {
-                Text(nome).font(.subheadline.bold())
-                Spacer()
-                Text(Formato.reais(g.faturamento)).monospacedDigit()
-            }
-            Text((["\(g.corridas) corridas", "\(g.ofertas) ofertas",
-                  g.porHora.map { Formato.reais($0) + "/h" }, g.poucosDados ? "poucos dados" : nil] as [String?])
-                .compactMap { $0 }.joined(separator: " · "))
-                .font(.caption).foregroundStyle(.secondary)
         }
     }
 }
@@ -253,38 +400,10 @@ extension Periodo {
         switch self {
         case .hoje:      return "Hoje"
         case .ontem:     return "Ontem"
-        case .ultimos7:  return "Últimos 7 dias"
-        case .ultimos30: return "Últimos 30 dias"
+        case .ultimos7:  return "7 dias"
+        case .ultimos30: return "30 dias"
         case .semana:    return "Esta semana"
         case .mes:       return "Este mês"
-        }
-    }
-}
-
-/// Bloco curto do histórico (hoje e 7 dias), no topo de Análises.
-struct HistoricoCurto: View {
-    @ObservedObject var turnos = TurnoStore.shared
-    @ObservedObject var linha = LinhaDoTempoStore.shared
-
-    var body: some View {
-        if !turnos.turnos.isEmpty {
-            Section {
-                linhaPeriodo(.hoje)
-                linhaPeriodo(.ultimos7)
-            } header: {
-                Text("Resumo rápido")
-            }
-        }
-    }
-
-    private func linhaPeriodo(_ p: Periodo) -> some View {
-        let a = ResumoAgregado(resumos: Historico.turnos(turnos.turnos, em: p).map { turnos.resumo($0) })
-        return LabeledContent(p.nome) {
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Formato.reais(a.confirmado)).monospacedDigit().bold()
-                Text("\(a.corridasFeitas) corridas" + (a.porHora.valor.map { " · " + Formato.reais($0) + "/h" } ?? ""))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
         }
     }
 }
