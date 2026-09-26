@@ -66,6 +66,9 @@ struct MaisView: View {
                 NavigationLink { TesteView() } label: {
                     Label("Testar com um print", systemImage: "photo.on.rectangle")
                 }
+                NavigationLink { CatalogoTemaView() } label: {
+                    Label("Visual do Apex (catálogo)", systemImage: "paintpalette")
+                }
             }
 
             Section {

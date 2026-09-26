@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Padrões visuais do app num lugar só. Antes de criar um estilo novo, use/estenda estes.
+// Componentes antigos, agora ligados aos tokens de Tema.swift. Antes de criar um estilo novo, use/estenda estes.
 
 /// Número principal ("R$ 186,40") com rótulo pequeno embaixo.
 struct NumeroDestaque: View {
@@ -11,13 +11,14 @@ struct NumeroDestaque: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(valor)
-                .font(grande ? .system(size: 40, weight: .bold, design: .rounded) : .title3.bold())
+                .font(grande ? Tipo.destaque : Tipo.metrica)
                 .monospacedDigit()
+                .foregroundStyle(Tema.texto)
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
             Text(rotulo)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Tipo.legenda)
+                .foregroundStyle(Tema.textoSecundario)
         }
     }
 }
@@ -34,7 +35,7 @@ struct MedidaTexto: View {
             mostrarNota.toggle()
         } label: {
             Text(texto)
-                .foregroundStyle(medida.confianca == .estimado ? Color.orange : Color.primary)
+                .foregroundStyle(medida.confianca == .estimado ? Tema.atencao : Tema.texto)
                 .monospacedDigit()
         }
         .buttonStyle(.plain)
@@ -69,16 +70,16 @@ struct Etiqueta: View {
 extension Confianca {
     var cor: Color {
         switch self {
-        case .confirmado:    return .green
-        case .estimado:      return .orange
-        case .indeterminado: return .gray
+        case .confirmado:    return Tema.positivo
+        case .estimado:      return Tema.atencao
+        case .indeterminado: return Tema.neutro
         }
     }
 }
 
-/// Botão grande pras ações principais (Iniciar/Encerrar turno).
+/// Botão grande pras ações principais (Iniciar/Encerrar turno). Telas novas: BotaoPrimario.
 struct BotaoGrande: ButtonStyle {
-    var cor: Color = .accentColor
+    var cor: Color = Tema.primaria
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
