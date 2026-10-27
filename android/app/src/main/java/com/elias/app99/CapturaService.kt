@@ -30,6 +30,7 @@ import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import com.google.android.gms.tasks.Tasks
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.time.LocalDate
@@ -270,7 +271,7 @@ class CapturaService : Service() {
         Processador.executar {
             try {
                 val texto = Tasks.await(reconhecedor.process(InputImage.fromBitmap(bitmap, 0)))
-                Processador.analisarAgora(Ocr.ordenar(texto, bitmap.height))
+                Processador.analisarAgora(ordenar(texto, bitmap.height))
             } catch (_: Throwable) {
             } finally {
                 bitmap.recycle()
@@ -289,6 +290,18 @@ class CapturaService : Service() {
         val corte = Bitmap.createBitmap(cheio, 0, y0, img.width, img.height - y0)
         if (corte !== cheio) cheio.recycle()
         return corte
+    }
+
+    /** Linhas na ordem de leitura (cima → baixo, esquerda → direita). */
+    private fun ordenar(texto: Text, altura: Int): List<String> {
+        val tolerancia = maxOf(1f, altura * 0.01f)
+        return texto.textBlocks.flatMap { it.lines }
+            .filter { it.boundingBox != null }
+            .sortedWith(
+                compareBy<Text.Line>({ (it.boundingBox!!.exactCenterY() / tolerancia).roundToInt() },
+                    { it.boundingBox!!.left })
+            )
+            .map { it.text }
     }
 
     // MARK: Encerramento

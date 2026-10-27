@@ -6,14 +6,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -77,23 +70,6 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
     var notificacoes by remember { mutableStateOf(Ajustes.chave(ctx, "notificacoes", true)) }
     var bairros by remember { mutableStateOf(Ajustes.chave(ctx, "bairros", false)) }
     var modo by remember { mutableStateOf(Ajustes.modoLeitura(ctx)) }
-    var teste by remember { mutableStateOf<TestePrint?>(null) }
-    var lendo by remember { mutableStateOf(false) }
-    val escopo = rememberCoroutineScope()
-    val escolherPrint = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) {
-            lendo = true
-            escopo.launch {
-                val r = withContext(Dispatchers.Default) {
-                    try { testarPrint(ctx, uri) } catch (_: Exception) { TestePrint(emptyList(), null) }
-                }
-                lendo = false
-                teste = r
-                r.analise?.let { Sobreposicao.mostrarTeste(ctx, it) }
-            }
-        }
-    }
-    if (lendo || teste != null) DialogoTeste(teste, lendo) { teste = null }
     val pacoteLido by Estado.pacoteLido.collectAsState()
 
     fun pedirSobreposicao() {
@@ -187,9 +163,6 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
             Cartao(espaco = 12.dp) {
                 LinhaValor("Preferências", "") { abrir(Detalhe.Preferencias) }
                 Divisor()
-                LinhaValor("Testar com um print", "") { escolherPrint.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
-                Divisor()
                 LinhaValor("Linha do tempo técnica", "") { abrir(Detalhe.Linha) }
                 Divisor()
                 LinhaValor("Não otimizar bateria", "") {
@@ -271,39 +244,4 @@ fun TelaLinha(voltar: () -> Unit) {
             }
         }
     }
-}
-
-/** Resultado do teste com print: valores lidos e classificação, ou o texto cru se não achou oferta. */
-@Composable
-private fun DialogoTeste(r: TestePrint?, lendo: Boolean, fechar: () -> Unit) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = fechar,
-        containerColor = Cor.cartao,
-        title = { Text(if (lendo) "Lendo o print…" else "Teste com print", color = Cor.texto) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                val a = r?.analise
-                when {
-                    lendo -> Text("Aguarde", color = Cor.texto2)
-                    a != null -> {
-                        Text(a.veredito.titulo, color = a.veredito.cor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        LinhaValor("Valor", Formato.reais(a.oferta.valor), aoTocar = null)
-                        LinhaValor("Até o passageiro", Formato.km(a.oferta.kmAtePassageiro), aoTocar = null)
-                        LinhaValor("Viagem", Formato.km(a.oferta.kmViagem), aoTocar = null)
-                        LinhaValor("Por km", Formato.reais(a.ganhoPorKm), aoTocar = null)
-                        LinhaValor("Lucro", Formato.reais(a.lucro), aoTocar = null)
-                        a.oferta.notaPassageiro?.let { LinhaValor("Nota", Formato.nota(it), aoTocar = null) }
-                    }
-                    else -> {
-                        Text("Não achei uma oferta da 99 neste print.", color = Cor.texto)
-                        Spacer(Modifier.height(8.dp))
-                        Text("Texto lido:", color = Cor.texto2, fontSize = 12.sp)
-                        Text(r?.linhas?.take(40)?.joinToString("\n")?.ifEmpty { "(nenhum)" } ?: "(nenhum)",
-                            color = Cor.texto2, fontSize = 12.sp)
-                    }
-                }
-            }
-        },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = fechar) { Text("OK", color = Cor.azul) } }
-    )
 }
