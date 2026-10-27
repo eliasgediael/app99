@@ -30,9 +30,10 @@ object Notificador {
             titulo += " · ⭐ ${Formato.nota(it)}"
             if (a.notaBaixa) titulo += " nota baixa"
         }
+        // Recolhida a notificação mostra só uma linha: tudo vai nela
         enviar(
             ctx, titulo,
-            "💵 ${Formato.reais(a.oferta.valor)} · 💰 Lucro ${Formato.reais(a.lucro)}\n" +
+            "💵 ${Formato.reais(a.oferta.valor)} · 💰 ${Formato.reais(a.lucro)} · " +
                 "📊 ${Formato.reais(a.ganhoPorKm)}/km · 📏 ${Formato.km(a.kmTotal)}",
             1
         )
@@ -56,7 +57,7 @@ object Notificador {
         val n = NotificationCompat.Builder(ctx, CANAL_AVISO)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(titulo)
-            .setContentText(corpo.lineSequence().first())
+            .setContentText(corpo.replace("\n", " · "))
             .setStyle(NotificationCompat.BigTextStyle().bigText(corpo))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
