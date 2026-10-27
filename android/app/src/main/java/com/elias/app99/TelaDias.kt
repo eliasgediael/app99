@@ -151,7 +151,8 @@ fun TelaMeuDia(data: LocalDate, voltar: () -> Unit, verAnalise: () -> Unit) {
                 Spacer(Modifier.height(12.dp))
                 Divisor()
                 LinhaIcone(Icons.Rounded.Schedule, "Tempo online", if (r.onlineMs > 0) Formato.duracao(r.onlineMs) else "—")
-                LinhaIcone(Icons.Rounded.Straighten, "Distância total", r.km?.let { "≈ " + Formato.km(it) } ?: "—")
+                LinhaIcone(Icons.Rounded.Straighten, "Distância total",
+                    r.km?.let { (if (r.kmAproximado) "≈ " else "") + Formato.km(it) } ?: "—")
                 LinhaIcone(Icons.Rounded.Speed, "Média por hora", r.porHora?.let { Formato.reais(it) } ?: "—")
                 LinhaIcone(Icons.Rounded.Route, "Média por km", r.porKm?.let { Formato.reais(it) } ?: "—")
                 r.lucro(config)?.let { LinhaIcone(Icons.Rounded.BarChart, "Lucro estimado", Formato.reais(it)) }

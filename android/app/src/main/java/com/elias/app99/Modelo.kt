@@ -163,7 +163,9 @@ data class EventoLinha(
     var viagemM: Int = 0,
     var nota100: Int = 0,
     var oferta: Int = 0,                     // id da oferta (0 = nenhuma)
-    var minutos: Int = 0                     // busca × 1000 + viagem (0 = não lido)
+    var minutos: Int = 0,                    // busca × 1000 + viagem (0 = não lido)
+    var lat: Double? = null,                 // posição do GPS no momento (só com turno e sinal)
+    var lon: Double? = null
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("seq", seq); put("em", em); put("tipo", tipo.v); put("origem", origem.v)
@@ -172,6 +174,8 @@ data class EventoLinha(
         put("conf", confianca?.v ?: 0); put("motivo", motivo.v); put("extra", extra)
         put("valorCent", valorCent); put("buscaM", buscaM); put("viagemM", viagemM)
         put("nota100", nota100); put("oferta", oferta); put("minutos", minutos)
+        lat?.let { put("lat", it) }
+        lon?.let { put("lon", it) }
     }
 
     companion object {
@@ -187,7 +191,9 @@ data class EventoLinha(
                 motivo = Motivo.de(j.optInt("motivo")), extra = j.optInt("extra"),
                 valorCent = j.optInt("valorCent"), buscaM = j.optInt("buscaM"),
                 viagemM = j.optInt("viagemM"), nota100 = j.optInt("nota100"),
-                oferta = j.optInt("oferta"), minutos = j.optInt("minutos")
+                oferta = j.optInt("oferta"), minutos = j.optInt("minutos"),
+                lat = if (j.has("lat")) j.optDouble("lat") else null,
+                lon = if (j.has("lon")) j.optDouble("lon") else null
             )
         }
     }

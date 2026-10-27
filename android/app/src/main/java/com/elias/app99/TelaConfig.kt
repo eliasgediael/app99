@@ -68,6 +68,7 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
     var sobreposicao by remember { mutableStateOf(Ajustes.chave(ctx, "overlay", true)) }
     var bolha by remember { mutableStateOf(Ajustes.chave(ctx, "bolha", true)) }
     var notificacoes by remember { mutableStateOf(Ajustes.chave(ctx, "notificacoes", true)) }
+    var bairros by remember { mutableStateOf(Ajustes.chave(ctx, "bairros", false)) }
 
     fun pedirSobreposicao() {
         if (!Settings.canDrawOverlays(ctx)) {
@@ -99,6 +100,11 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
                 LinhaChave("Notificações", "Alerta de corrida boa, aceitável ou ruim",
                     Icons.Rounded.NotificationsActive, Cor.verde, notificacoes) {
                     notificacoes = it; Ajustes.definirChave(ctx, "notificacoes", it)
+                }
+                Divisor()
+                LinhaChave("Identificar bairros", "Envia ao serviço de mapas o centro de cada área",
+                    null, Cor.azul, bairros) {
+                    bairros = it; Ajustes.definirChave(ctx, "bairros", it)
                 }
             }
 

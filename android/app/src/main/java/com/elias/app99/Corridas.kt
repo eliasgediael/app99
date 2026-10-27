@@ -21,7 +21,9 @@ data class CorridaResumo(
     val buscaM: Int = 0,
     val viagemM: Int = 0,
     val nota: Double? = null,
-    val minutos: Int = 0
+    val minutos: Int = 0,
+    val embarque: Pair<Double, Double>? = null,
+    val desembarque: Pair<Double, Double>? = null
 ) {
     val confirmada get() = confianca == Confianca.CONFIRMADO
     val estimada get() = confianca == Confianca.ESTIMADO
@@ -58,6 +60,7 @@ object Corridas {
             when (e.tipo) {
                 TipoEvento.ACEITE_DETECTADO -> {
                     c = c.copy(aceiteEm = e.em)
+                    if (c.embarque == null) posicao(e)?.let { c = c.copy(embarque = it) }
                     if (e.oferta > 0) {
                         c = c.copy(
                             valorOfertaCent = e.valorCent, buscaM = e.buscaM, viagemM = e.viagemM,
@@ -66,9 +69,13 @@ object Corridas {
                         )
                     }
                 }
-                TipoEvento.PASSAGEIRO_A_BORDO -> c = c.copy(aBordoEm = e.em)
+                TipoEvento.PASSAGEIRO_A_BORDO -> {
+                    c = c.copy(aBordoEm = e.em)
+                    posicao(e)?.let { c = c.copy(embarque = it) }
+                }
                 TipoEvento.FIM_DETECTADO -> {
                     c = c.copy(fimEm = e.em)
+                    posicao(e)?.let { c = c.copy(desembarque = it) }
                     if (e.motivo == Motivo.VALOR_FINAL_LIDO_NA_TELA && e.valorCent > 0) c = c.copy(valorFinalCent = e.valorCent)
                 }
                 TipoEvento.TRANSICAO -> {
@@ -90,19 +97,26 @@ object Corridas {
         return porId.values.toList()
     }
 
+    private fun posicao(e: EventoLinha): Pair<Double, Double>? {
+        val la = e.lat ?: return null
+        val lo = e.lon ?: return null
+        return la to lo
+    }
+
     fun classificar(c: CorridaResumo, config: ConfigMoto): Veredito? =
         c.oferta()?.let { CalculadoraCorrida(config).analisar(it).veredito }
 }
 
 /** Totais de um conjunto de corridas e do tempo online correspondente. */
-data class Resumo(val corridas: List<CorridaResumo>, val onlineMs: Long) {
+data class Resumo(val corridas: List<CorridaResumo>, val onlineMs: Long, val kmGps: Double? = null) {
     val confirmadas = corridas.filter { it.confirmada }
     val estimadas = corridas.filter { it.estimada }
     val faturado: Double = confirmadas.sumOf { it.valor ?: 0.0 }
     val estimado: Double = estimadas.sumOf { it.valor ?: 0.0 }
 
-    /** Km pelas ofertas (busca + viagem) das corridas confirmadas. */
-    val km: Double? = confirmadas.mapNotNull { it.km }.takeIf { it.isNotEmpty() }?.sum()
+    /** Km do GPS do turno; sem GPS, a soma das ofertas (busca + viagem) das confirmadas, aproximada. */
+    val km: Double? = kmGps?.takeIf { it > 0 } ?: confirmadas.mapNotNull { it.km }.takeIf { it.isNotEmpty() }?.sum()
+    val kmAproximado: Boolean get() = kmGps == null || kmGps <= 0
 
     val porHora: Double? get() = if (onlineMs >= 60_000) faturado / (onlineMs / 3_600_000.0) else null
     val porKm: Double? get() = km?.takeIf { it > 0 }?.let { faturado / it }
@@ -112,7 +126,12 @@ data class Resumo(val corridas: List<CorridaResumo>, val onlineMs: Long) {
 }
 
 /** Junta corridas (da linha do tempo) e tempo online (dos turnos) por período. */
-class Painel(val corridas: List<CorridaResumo>, val turnos: List<Turno>, val dias: List<Dia>) {
+class Painel(
+    val corridas: List<CorridaResumo>,
+    val turnos: List<Turno>,
+    val dias: List<Dia>,
+    private val rastros: Map<String, List<PontoGps>> = emptyMap()
+) {
     private val zona = ZoneId.systemDefault()
 
     fun inicioDoDia(d: LocalDate) = d.atStartOfDay(zona).toInstant().toEpochMilli()
@@ -129,11 +148,20 @@ class Painel(val corridas: List<CorridaResumo>, val turnos: List<Turno>, val dia
                 !data.isBefore(de) && !data.isAfter(ate)
             }.sumOf { it.segundos * 1000L }
         }
-        return Resumo(lista, online)
+        return Resumo(lista, online, kmGps(ini, fim))
     }
 
     fun resumoTurno(t: Turno, agora: Long = System.currentTimeMillis()) =
-        Resumo(corridas.filter { c -> c.termino?.let { t.contem(it * 1000) } ?: false }, t.onlineMs(agora))
+        Resumo(
+            corridas.filter { c -> c.termino?.let { t.contem(it * 1000) } ?: false }, t.onlineMs(agora),
+            rastros[t.id]?.let { Rastro.km(it, t.inicio, t.fim ?: Long.MAX_VALUE) }
+        )
+
+    private fun kmGps(de: Long, ate: Long): Double? {
+        val com = turnos.filter { (rastros[it.id]?.isNotEmpty() == true) && it.onlineEntre(de, ate) > 0 }
+        if (com.isEmpty()) return null
+        return com.sumOf { Rastro.km(rastros[it.id]!!, de, ate) }
+    }
 
     /** Dias que têm alguma corrida ou turno, do mais novo pro mais antigo. */
     fun diasComDados(): List<LocalDate> {

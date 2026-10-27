@@ -72,7 +72,7 @@ object Ajustes {
 class Diario private constructor(ctx: Context) : RegistroMotor {
     private val prefs = ctx.getSharedPreferences("diario", Context.MODE_PRIVATE)
     private val arquivoEventos = File(ctx.filesDir, "linha-do-tempo.json")
-    private val limiteEventos = 1500
+    private val pasta = File(ctx.filesDir, "linha")
 
     val diasFlow = MutableStateFlow<List<Dia>>(emptyList())
     val eventosFlow = MutableStateFlow<List<EventoLinha>>(emptyList())
@@ -82,6 +82,7 @@ class Diario private constructor(ctx: Context) : RegistroMotor {
     private var marcoTempo: Long? = null
 
     companion object {
+        private const val RETENCAO_DIAS = 90
         @Volatile private var inst: Diario? = null
 
         fun get(ctx: Context): Diario =
@@ -97,13 +98,18 @@ class Diario private constructor(ctx: Context) : RegistroMotor {
             }
         } catch (_: Exception) {
         }
-        try {
-            if (arquivoEventos.exists()) {
-                val arr = JSONArray(arquivoEventos.readText())
-                for (i in 0 until arr.length()) EventoLinha.deJson(arr.getJSONObject(i))?.let { eventos.add(it) }
+        pasta.mkdirs()
+        migrarArquivoUnico()
+        val limite = diaDe(System.currentTimeMillis() / 1000) - RETENCAO_DIAS
+        pasta.listFiles()?.filter { it.name.endsWith(".json") }?.sortedBy { it.name }?.forEach { f ->
+            val dia = f.name.removeSuffix(".json").toLongOrNull()
+            if (dia == null || dia < limite) {
+                f.delete()
+            } else {
+                eventos.addAll(lerArquivo(f))
             }
-        } catch (_: Exception) {
         }
+        eventos.sortBy { it.seq }
         publicar()
     }
 
@@ -151,13 +157,45 @@ class Diario private constructor(ctx: Context) : RegistroMotor {
 
     @Synchronized override fun adicionar(evento: EventoLinha) {
         evento.seq = proximo("linhaSeq")
+        // Onde aconteceu: posição do GPS do turno, se for recente
+        Rastro.ultima?.takeIf { evento.em * 1000 - it.t in -5_000..60_000 }?.let {
+            evento.lat = it.lat
+            evento.lon = it.lon
+        }
         eventos.add(evento)
-        if (eventos.size > limiteEventos) eventos.subList(0, eventos.size - limiteEventos).clear()
+        gravarDia(diaDe(evento.em))
+        publicar()
+    }
+
+    private fun diaDe(epochSeg: Long): Long = Dia.numero(epochSeg * 1000).toLong()
+
+    private fun gravarDia(dia: Long) {
         try {
-            arquivoEventos.writeText(JSONArray(eventos.map { it.toJson() }).toString())
+            val doDia = eventos.filter { diaDe(it.em) == dia }
+            File(pasta, "$dia.json").writeText(JSONArray(doDia.map { it.toJson() }).toString())
         } catch (_: Exception) {
         }
-        publicar()
+    }
+
+    private fun lerArquivo(f: File): List<EventoLinha> = try {
+        val arr = JSONArray(f.readText())
+        (0 until arr.length()).mapNotNull { EventoLinha.deJson(arr.getJSONObject(it)) }
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /** Versões anteriores guardavam tudo num arquivo só: separa por dia uma vez e guarda o original. */
+    private fun migrarArquivoUnico() {
+        if (!arquivoEventos.exists()) return
+        val antigos = lerArquivo(arquivoEventos)
+        antigos.groupBy { diaDe(it.em) }.forEach { (dia, lista) ->
+            val f = File(pasta, "$dia.json")
+            val ja = if (f.exists()) lerArquivo(f) else emptyList()
+            val seqs = ja.map { it.seq }.toHashSet()
+            val juntos = (ja + lista.filter { it.seq !in seqs }).sortedBy { it.seq }
+            try { f.writeText(JSONArray(juntos.map { it.toJson() }).toString()) } catch (_: Exception) {}
+        }
+        arquivoEventos.renameTo(File(arquivoEventos.parentFile, "linha-do-tempo-antigo.json"))
     }
 
     // MARK: Tempo com a leitura ligada

@@ -110,7 +110,10 @@ class CapturaService : Service() {
         Notificador.canais(this)
         val notificacao = montarNotificacao()
         if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(ID_NOTIFICACAO, notificacao, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            // Com GPS permitido, o serviço também é de localização (km e mapa do turno)
+            val tipo = ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                (if (temGps()) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0)
+            startForeground(ID_NOTIFICACAO, notificacao, tipo)
         } else {
             startForeground(ID_NOTIFICACAO, notificacao)
         }
@@ -182,8 +185,9 @@ class CapturaService : Service() {
         )
 
         Estado.rodando.value = true
-        TurnoStore.get(this).iniciar()
+        val turno = TurnoStore.get(this).iniciar()
         Sobreposicao.ligar(this)
+        ligarGps(turno, thread)
         filaOCR.execute {
             diario.comecarTempo()
             diario.adicionar(
@@ -193,6 +197,34 @@ class CapturaService : Service() {
             val c = Ajustes.config(this)
             Notificador.enviar(this, "Leitura ligada. Mínimo ${Formato.reais(c.minimoPorKm)}/km. Abra a 99.")
             if (Ajustes.vozLigada(this)) narrador.falar("Leitor da 99 ligado.", Ajustes.velocidade(this))
+        }
+    }
+
+    // MARK: GPS do turno
+
+    private var gps: android.location.LocationManager? = null
+
+    private val ouvinteGps = object : android.location.LocationListener {
+        override fun onLocationChanged(l: android.location.Location) {
+            Rastro.adicionar(this@CapturaService, PontoGps(l.time, l.latitude, l.longitude, l.accuracy))
+        }
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+        @Deprecated("Android antigo ainda chama")
+        override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+    }
+
+    private fun temGps() = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
+
+    private fun ligarGps(turno: Turno, thread: HandlerThread) {
+        Rastro.comecar(this, turno.id)
+        if (!temGps()) return
+        val lm = getSystemService(android.location.LocationManager::class.java)
+        try {
+            lm.requestLocationUpdates(android.location.LocationManager.GPS_PROVIDER, 3_000L, 0f, ouvinteGps, thread.looper)
+            gps = lm
+        } catch (_: Exception) {
         }
     }
 
@@ -329,6 +361,8 @@ class CapturaService : Service() {
 
     override fun onDestroy() {
         encerrando = true
+        gps?.removeUpdates(ouvinteGps)
+        Rastro.parar(this)
         virtualDisplay?.release()
         reader?.close()
         try { projection?.stop() } catch (_: Exception) {}

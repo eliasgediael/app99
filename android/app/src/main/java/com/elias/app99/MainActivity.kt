@@ -98,7 +98,9 @@ fun lembrarPainel(): Painel {
     val dias by diario.diasFlow.collectAsState()
     val turnos by remember { TurnoStore.get(ctx) }.turnos.collectAsState()
     val corridas = remember(eventos) { Corridas.de(eventos) }
-    return remember(corridas, turnos, dias) { Painel(corridas, turnos, dias) }
+    return remember(corridas, turnos, dias) {
+        Painel(corridas, turnos, dias, turnos.associate { it.id to Rastro.de(ctx, it) })
+    }
 }
 
 /** Relógio que anda a cada 30 s (tempo do turno, R$/h). */
