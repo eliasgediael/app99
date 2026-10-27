@@ -103,6 +103,7 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
                         )
                     }
                     pacoteLido?.let { Text("Último app lido: $it", color = Cor.texto3, fontSize = 12.sp) }
+                    LinhaValor("Diagnóstico da leitura", "") { abrir(Detalhe.Diagnostico) }
                 } else {
                     Text("O Android pede permissão de gravação a cada turno.", color = Cor.texto2, fontSize = 12.sp,
                         modifier = Modifier.padding(top = 8.dp))

@@ -28,27 +28,61 @@ class LeituraAcessibilidade : AccessibilityService() {
         ultimaLeitura = agora
 
         val linhas = mutableListOf<Pedaco>()
+        val diag = mutableListOf<String>()
         val janelas = try { windows } catch (_: Exception) { emptyList() }
-        var achou = false
+        var lidas = 0
         for (j in janelas) {
             val raiz = j.root ?: continue
             if (eh99(raiz.packageName?.toString() ?: "")) {
-                coletar(raiz, linhas)
-                achou = true
+                diag.add("[janela tipo ${j.type}]")
+                coletar(raiz, linhas, diag)
+                lidas++
             }
         }
-        if (!achou) rootInActiveWindow?.let { r -> if (eh99(r.packageName?.toString() ?: "")) coletar(r, linhas) }
+        if (lidas == 0) rootInActiveWindow?.let { r ->
+            if (eh99(r.packageName?.toString() ?: "")) {
+                diag.add("[janela ativa]")
+                coletar(r, linhas, diag)
+                lidas++
+            }
+        }
+        val textoEvento = (evento.text.joinToString(" ") + " " + (evento.contentDescription ?: "")).trim()
+        if (textoEvento.isNotEmpty()) diag.add("[texto do evento] $textoEvento")
 
         Estado.pacoteLido.value = pacote
-        Processador.processar(ordenar(linhas))
+        val ordenadas = ordenar(linhas)
+        DiagnosticoLeitura.registrar(
+            FotoTela(
+                System.currentTimeMillis(), pacote, AccessibilityEvent.eventTypeToString(evento.eventType), lidas,
+                diag.take(250), ParserOferta99.extrair(ordenadas) != null
+            )
+        )
+        Processador.processar(ordenadas)
     }
 
     override fun onInterrupt() {}
 
     private data class Pedaco(val texto: String, val topo: Int, val centroY: Int, val esquerda: Int)
 
-    private fun coletar(no: AccessibilityNodeInfo, saida: MutableList<Pedaco>, profundidade: Int = 0) {
+    private fun coletar(
+        no: AccessibilityNodeInfo, saida: MutableList<Pedaco>, diag: MutableList<String>, profundidade: Int = 0
+    ) {
         if (profundidade > 40) return
+        // Diagnóstico: tudo que o nó tem (texto, descrição, id, tipo), visível ou não
+        val txt = no.text?.toString()?.trim().orEmpty()
+        val desc = no.contentDescription?.toString()?.trim().orEmpty()
+        val id = no.viewIdResourceName?.substringAfter(":id/").orEmpty()
+        if (txt.isNotEmpty() || desc.isNotEmpty() || id.isNotEmpty()) {
+            diag.add(
+                "  ".repeat(profundidade.coerceAtMost(8)) + (if (no.isVisibleToUser) "" else "(oculto) ") +
+                    listOfNotNull(
+                        txt.takeIf { it.isNotEmpty() }?.let { "\"$it\"" },
+                        desc.takeIf { it.isNotEmpty() && it != txt }?.let { "desc=\"$it\"" },
+                        id.takeIf { it.isNotEmpty() }?.let { "#$it" },
+                        no.className?.toString()?.substringAfterLast('.')
+                    ).joinToString(" ")
+            )
+        }
         if (no.isVisibleToUser) {
             val texto = (no.text ?: no.contentDescription)?.toString()?.trim()
             if (!texto.isNullOrEmpty()) {
@@ -61,7 +95,7 @@ class LeituraAcessibilidade : AccessibilityService() {
         }
         for (i in 0 until no.childCount) {
             val filho = no.getChild(i) ?: continue
-            coletar(filho, saida, profundidade + 1)
+            coletar(filho, saida, diag, profundidade + 1)
             if (Build.VERSION.SDK_INT < 33) {
                 @Suppress("DEPRECATION") filho.recycle()
             }

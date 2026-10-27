@@ -80,6 +80,7 @@ sealed class Detalhe {
     object Configuracoes : Detalhe()
     object Preferencias : Detalhe()
     object Linha : Detalhe()
+    object Diagnostico : Detalhe()
     data class MeuDia(val data: LocalDate) : Detalhe()
 }
 
@@ -176,6 +177,7 @@ fun App() {
                 Detalhe.Configuracoes -> TelaConfiguracoes(voltar, abrir)
                 Detalhe.Preferencias -> TelaPreferencias(voltar)
                 Detalhe.Linha -> TelaLinha(voltar)
+                Detalhe.Diagnostico -> TelaDiagnostico(voltar)
                 is Detalhe.MeuDia -> TelaMeuDia(topo.data, voltar) { pilha.clear(); aba = 3 }
             }
         }
