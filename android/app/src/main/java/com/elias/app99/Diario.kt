@@ -19,6 +19,12 @@ object Estado {
 
     /** Mesmo valor, pra tela (a bolha some com o Apex aberto). */
     val naFrente = MutableStateFlow(false)
+
+    /** Turno pausado: nenhuma leitura é feita. */
+    @Volatile var pausado = false
+
+    /** Último app lido pela acessibilidade (diagnóstico). */
+    val pacoteLido = MutableStateFlow<String?>(null)
 }
 
 /** Ajustes do usuário (valores da moto, voz). */
@@ -45,6 +51,14 @@ object Ajustes {
             notaMinima = valor(c, "notaMinima", d.notaMinima),
             lucroMinimo = valor(c, "lucroMinimo", d.lucroMinimo)
         )
+    }
+
+    /** "acessibilidade" (padrão) ou "gravacao" (reserva). */
+    fun modoLeitura(c: Context): String =
+        p(c).getString("modoLeitura", LeituraAcessibilidade.MODO_ACESSIBILIDADE) ?: LeituraAcessibilidade.MODO_ACESSIBILIDADE
+
+    fun definirModoLeitura(c: Context, modo: String) {
+        p(c).edit().putString("modoLeitura", modo).apply()
     }
 
     /** Meta do dia em R$ (0 = sem meta). */

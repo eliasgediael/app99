@@ -35,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -143,11 +144,20 @@ fun App() {
             )
         }
     }
+    var pedirAcessibilidade by remember { mutableStateOf(false) }
     val acoes = remember {
         AcoesTurno(
             iniciar = {
-                val mpm = ctx.getSystemService(MediaProjectionManager::class.java)
-                pedirCaptura.launch(mpm.createScreenCaptureIntent())
+                if (Ajustes.modoLeitura(ctx) == LeituraAcessibilidade.MODO_GRAVACAO) {
+                    val mpm = ctx.getSystemService(MediaProjectionManager::class.java)
+                    pedirCaptura.launch(mpm.createScreenCaptureIntent())
+                } else if (LeituraAcessibilidade.ativa(ctx)) {
+                    ContextCompat.startForegroundService(
+                        ctx, Intent(ctx, CapturaService::class.java).setAction(CapturaService.ACAO_INICIAR)
+                    )
+                } else {
+                    pedirAcessibilidade = true
+                }
             },
             pausar = { comandoServico(ctx, CapturaService.ACAO_PAUSAR) },
             retomar = { comandoServico(ctx, CapturaService.ACAO_RETOMAR) },
@@ -156,6 +166,8 @@ fun App() {
     }
     val abrir: (Detalhe) -> Unit = { pilha.add(it) }
     val voltar: () -> Unit = { if (pilha.isNotEmpty()) pilha.removeAt(pilha.lastIndex) }
+
+    if (pedirAcessibilidade) DialogoAcessibilidade { pedirAcessibilidade = false }
 
     val topo = pilha.lastOrNull()
     if (topo != null) {
@@ -197,4 +209,42 @@ fun App() {
             }
         }
     }
+}
+
+/** Primeira vez: ligar o Apex em Acessibilidade (o Android não deixa o app ligar sozinho). */
+@Composable
+fun DialogoAcessibilidade(fechar: () -> Unit) {
+    val ctx = LocalContext.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = fechar,
+        containerColor = Cor.cartao,
+        title = { Text("Ligar a leitura da 99", color = Cor.texto) },
+        text = {
+            Text(
+                "1. Toque em Abrir acessibilidade.\n" +
+                    "2. Em Apps instalados, abra Apex e ative.\n\n" +
+                    "Se aparecer \"configuração restrita\": toque em Tela do app, depois ⋮ (canto de cima) → " +
+                    "Permitir configurações restritas, e volte ao passo 1.",
+                color = Cor.texto2
+            )
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                ctx.startActivity(
+                    Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                fechar()
+            }) { Text("Abrir acessibilidade", color = Cor.azul) }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = {
+                ctx.startActivity(
+                    Intent(
+                        android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        android.net.Uri.parse("package:${ctx.packageName}")
+                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }) { Text("Tela do app", color = Cor.texto2) }
+        }
+    )
 }

@@ -69,6 +69,8 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
     var bolha by remember { mutableStateOf(Ajustes.chave(ctx, "bolha", true)) }
     var notificacoes by remember { mutableStateOf(Ajustes.chave(ctx, "notificacoes", true)) }
     var bairros by remember { mutableStateOf(Ajustes.chave(ctx, "bairros", false)) }
+    var modo by remember { mutableStateOf(Ajustes.modoLeitura(ctx)) }
+    val pacoteLido by Estado.pacoteLido.collectAsState()
 
     fun pedirSobreposicao() {
         if (!Settings.canDrawOverlays(ctx)) {
@@ -85,6 +87,28 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Cartao(espaco = 12.dp) {
+                RotuloSecao("Leitura da 99")
+                Spacer(Modifier.height(10.dp))
+                Segmentos(
+                    listOf(LeituraAcessibilidade.MODO_ACESSIBILIDADE, LeituraAcessibilidade.MODO_GRAVACAO),
+                    { if (it == LeituraAcessibilidade.MODO_ACESSIBILIDADE) "Acessibilidade" else "Gravação de tela" },
+                    modo
+                ) { modo = it; Ajustes.definirModoLeitura(ctx, it) }
+                if (modo == LeituraAcessibilidade.MODO_ACESSIBILIDADE) {
+                    val ligada = LeituraAcessibilidade.ativa(ctx)
+                    LinhaValor("Acessibilidade do Apex", if (ligada) "Ligada" else "Desligada") {
+                        ctx.startActivity(
+                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        )
+                    }
+                    pacoteLido?.let { Text("Último app lido: $it", color = Cor.texto3, fontSize = 12.sp) }
+                } else {
+                    Text("O Android pede permissão de gravação a cada turno.", color = Cor.texto2, fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+
             Cartao(espaco = 12.dp) {
                 LinhaChave("Aviso sobre o 99Pop", "Mostra a análise de cada oferta por cima", Icons.Rounded.Layers,
                     Cor.azul, sobreposicao) {

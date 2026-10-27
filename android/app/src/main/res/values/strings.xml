@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="acessibilidade_descricao">Durante o turno, o Apex lê na tela da 99 o valor, as distâncias e a nota de cada oferta para mostrar se a corrida compensa. Só lê os apps da 99, não lê outros apps e não toca em nada: não aceita nem recusa corridas.</string>
+</resources>
