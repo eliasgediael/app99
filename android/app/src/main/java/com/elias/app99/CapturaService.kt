@@ -183,6 +183,7 @@ class CapturaService : Service() {
 
         Estado.rodando.value = true
         TurnoStore.get(this).iniciar()
+        Sobreposicao.ligar(this)
         filaOCR.execute {
             diario.comecarTempo()
             diario.adicionar(
@@ -287,6 +288,7 @@ class CapturaService : Service() {
             val analise = CalculadoraCorrida(config).analisar(oferta)
             Estado.ultimaAnalise.value = analise
             Notificador.enviar(this, analise)
+            Sobreposicao.mostrar(this, analise)
             if (Ajustes.vozLigada(this)) narrador.falar(analise.fraseFalada, Ajustes.velocidade(this))
             return
         }
@@ -350,6 +352,7 @@ class CapturaService : Service() {
             narrador.encerrar()
         }
         filaOCR.shutdown()
+        Sobreposicao.desligar()
         TurnoStore.get(this).encerrar()
         Estado.rodando.value = false
         super.onDestroy()

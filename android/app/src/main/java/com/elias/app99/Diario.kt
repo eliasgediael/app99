@@ -12,6 +12,13 @@ object Estado {
 
     /** O Apex está aberto na tela: o serviço não lê (seria a tela do próprio Apex). */
     @Volatile var appNaFrente = false
+        set(v) {
+            field = v
+            naFrente.value = v
+        }
+
+    /** Mesmo valor, pra tela (a bolha some com o Apex aberto). */
+    val naFrente = MutableStateFlow(false)
 }
 
 /** Ajustes do usuário (valores da moto, voz). */

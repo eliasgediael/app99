@@ -123,6 +123,9 @@ object Formato {
 
     fun inteiro(v: Double): String = Math.round(v).toString()
 
+    /** "R$ 186" (sem centavos, pra bolha) */
+    fun reaisCurto(v: Double): String = "R$ " + Math.round(v)
+
     /** 3h 12min · 45 min */
     fun duracao(ms: Long): String {
         val min = ms / 60_000

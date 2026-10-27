@@ -4,7 +4,14 @@ import android.content.Intent
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -92,6 +99,23 @@ fun TelaConfiguracoes(voltar: () -> Unit, abrir: (Detalhe) -> Unit) {
                 LinhaChave("Notificações", "Alerta de corrida boa, aceitável ou ruim",
                     Icons.Rounded.NotificationsActive, Cor.verde, notificacoes) {
                     notificacoes = it; Ajustes.definirChave(ctx, "notificacoes", it)
+                }
+            }
+
+            Cartao(espaco = 12.dp) {
+                RotuloSecao("Ver o aviso (exemplo)")
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Veredito.entries.forEach { v ->
+                        Text(
+                            v.curto, color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 14.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(v.cor)
+                                .clickable {
+                                    if (Sobreposicao.permitido(ctx)) Sobreposicao.testar(ctx, v) else pedirSobreposicao()
+                                }.padding(vertical = 10.dp)
+                        )
+                    }
                 }
             }
 
