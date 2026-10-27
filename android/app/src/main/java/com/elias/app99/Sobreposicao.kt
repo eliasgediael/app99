@@ -159,12 +159,21 @@ object Sobreposicao {
     /** Aviso de exemplo, pra ver como fica (marcado como teste). */
     fun testar(ctx: Context, v: Veredito) {
         if (!permitido(ctx)) return
-        val oferta = when (v) {
-            Veredito.BOA -> OfertaCorrida(12.10, 1.4, 9.8, 5, 23, 4.95, "")
-            Veredito.ACEITAVEL -> OfertaCorrida(9.40, 1.2, 5.6, 4, 19, 4.80, "")
-            Veredito.RUIM -> OfertaCorrida(5.20, 1.8, 2.9, 6, 13, 4.50, "")
+        // Exemplo montado com os critérios do usuário, pra cair na classificação do botão tocado
+        val c = Ajustes.config(ctx)
+        val busca = 1.2
+        val viagem = 6.0
+        val km = busca + viagem
+        val porKm = when (v) {
+            Veredito.BOA -> c.bomPorKm * 1.15
+            Veredito.ACEITAVEL -> (c.minimoPorKm + c.bomPorKm) / 2
+            Veredito.RUIM -> c.minimoPorKm * 0.7
         }
-        val a = CalculadoraCorrida(Ajustes.config(ctx)).analisar(oferta)
+        var valor = km * porKm
+        if (v != Veredito.RUIM && c.lucroMinimo > 0) valor = maxOf(valor, c.lucroMinimo + km * c.custoPorKm + 0.5)
+        valor = Math.round(valor * 10) / 10.0
+        val nota = maxOf(c.notaMinima, 4.9).coerceAtMost(5.0)
+        val a = CalculadoraCorrida(c).analisar(OfertaCorrida(valor, busca, viagem, 4, 18, nota, ""))
         principal.post {
             val app = ctx.applicationContext
             val gerente = wm ?: app.getSystemService(WindowManager::class.java).also { wm = it }
