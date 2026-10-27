@@ -35,8 +35,17 @@ object Ajustes {
             minimoPorKm = valor(c, "minimoPorKm", d.minimoPorKm),
             bomPorKm = valor(c, "bomPorKm", d.bomPorKm),
             alertaBuscaKm = valor(c, "alertaBuscaKm", d.alertaBuscaKm),
-            notaMinima = valor(c, "notaMinima", d.notaMinima)
+            notaMinima = valor(c, "notaMinima", d.notaMinima),
+            lucroMinimo = valor(c, "lucroMinimo", d.lucroMinimo)
         )
+    }
+
+    /** Meta do dia em R$ (0 = sem meta). */
+    fun metaDiaria(c: Context) = valor(c, "metaDiaria", 0.0)
+
+    fun chave(c: Context, nome: String, padrao: Boolean) = p(c).getBoolean(nome, padrao)
+    fun definirChave(c: Context, nome: String, valor: Boolean) {
+        p(c).edit().putBoolean(nome, valor).apply()
     }
 
     /** Desligada por padrão: com música tocando, voz + 99 + música vira bagunça; a notificação basta. */

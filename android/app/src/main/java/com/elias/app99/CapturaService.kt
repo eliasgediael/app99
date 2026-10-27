@@ -45,6 +45,8 @@ class CapturaService : Service() {
         const val EXTRA_CODE = "code"
         const val EXTRA_DATA = "data"
         const val ACAO_PARAR = "com.elias.app99.PARAR"
+        const val ACAO_PAUSAR = "com.elias.app99.PAUSAR"
+        const val ACAO_RETOMAR = "com.elias.app99.RETOMAR"
         private const val ID_NOTIFICACAO = 100
         private const val INTERVALO_MS = 500L
         private const val JANELA_REPETICAO_MS = 20_000L
@@ -60,6 +62,8 @@ class CapturaService : Service() {
     private val ocrRodando = AtomicBoolean(false)
     @Volatile private var ultimoFrame = 0L
     @Volatile private var encerrando = false
+    @Volatile private var pausado = false
+    private var ultimoMarco = 0L
 
     private val reconhecedor = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private lateinit var diario: Diario
@@ -70,9 +74,27 @@ class CapturaService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACAO_PARAR) {
-            stopSelf()
-            return START_NOT_STICKY
+        when (intent?.action) {
+            ACAO_PARAR -> {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            ACAO_PAUSAR -> {
+                if (projection != null) {
+                    pausado = true
+                    TurnoStore.get(this).pausar()
+                    atualizarNotificacao()
+                }
+                return START_NOT_STICKY
+            }
+            ACAO_RETOMAR -> {
+                if (projection != null) {
+                    pausado = false
+                    TurnoStore.get(this).retomar()
+                    atualizarNotificacao()
+                }
+                return START_NOT_STICKY
+            }
         }
         val code = intent?.getIntExtra(EXTRA_CODE, 0) ?: 0
         val data: Intent? = if (Build.VERSION.SDK_INT >= 33) {
@@ -100,21 +122,35 @@ class CapturaService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun acao(acao: String, codigo: Int) = PendingIntent.getService(
+        this, codigo, Intent(this, CapturaService::class.java).setAction(acao), PendingIntent.FLAG_IMMUTABLE
+    )
+
+    /** Notificação fixa do turno: ganhos de hoje e Pausar/Retomar, Abrir Apex, Encerrar. */
     private fun montarNotificacao(): Notification {
         val abrir = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
         )
-        val parar = PendingIntent.getService(
-            this, 1, Intent(this, CapturaService::class.java).setAction(ACAO_PARAR), PendingIntent.FLAG_IMMUTABLE
-        )
+        val painel = Painel(Corridas.de(Diario.get(this).eventosFlow.value), TurnoStore.get(this).turnos.value, emptyList())
+        val hoje = java.time.LocalDate.now()
+        val r = painel.resumo(hoje, hoje)
+        val texto = "Hoje ${Formato.reais(r.faturado)} · ${r.confirmadas.size} corridas" +
+            (r.porHora?.let { " · ${Formato.reais(it)}/h" } ?: "")
         return NotificationCompat.Builder(this, Notificador.CANAL_SERVICO)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("Apex lendo a tela")
-            .setContentText("Abra a 99. Cada oferta vira um aviso.")
+            .setContentTitle(if (pausado) "Turno pausado" else "Turno ativo")
+            .setContentText(texto)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
             .setContentIntent(abrir)
-            .addAction(0, "Encerrar", parar)
+            .addAction(0, if (pausado) "Retomar" else "Pausar", acao(if (pausado) ACAO_RETOMAR else ACAO_PAUSAR, 2))
+            .addAction(0, "Abrir Apex", abrir)
+            .addAction(0, "Encerrar", acao(ACAO_PARAR, 1))
             .build()
+    }
+
+    private fun atualizarNotificacao() {
+        getSystemService(android.app.NotificationManager::class.java).notify(ID_NOTIFICACAO, montarNotificacao())
     }
 
     private fun iniciarCaptura(code: Int, data: Intent) {
@@ -146,6 +182,7 @@ class CapturaService : Service() {
         )
 
         Estado.rodando.value = true
+        TurnoStore.get(this).iniciar()
         filaOCR.execute {
             diario.comecarTempo()
             diario.adicionar(
@@ -182,7 +219,13 @@ class CapturaService : Service() {
         }
         ultimoFrame = agora
 
-        if (Estado.appNaFrente) {   // é a tela do próprio Apex: não ler
+        if (agora - ultimoMarco >= 60_000) {   // a cada minuto: turno vivo e notificação em dia
+            ultimoMarco = agora
+            TurnoStore.get(this).marcarVivo()
+            atualizarNotificacao()
+        }
+
+        if (pausado || Estado.appNaFrente) {   // pausado, ou é a tela do próprio Apex: não ler
             img.close()
             filaOCR.execute {
                 diario.acumularTempo()
@@ -307,6 +350,7 @@ class CapturaService : Service() {
             narrador.encerrar()
         }
         filaOCR.shutdown()
+        TurnoStore.get(this).encerrar()
         Estado.rodando.value = false
         super.onDestroy()
     }

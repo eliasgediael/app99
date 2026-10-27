@@ -13,7 +13,9 @@ data class ConfigMoto(
     /** Busca acima disso gera aviso no áudio */
     val alertaBuscaKm: Double = 3.0,
     /** Passageiro com nota abaixo disso = recusa, mesmo com valor bom */
-    val notaMinima: Double = 4.90
+    val notaMinima: Double = 4.90,
+    /** Lucro (valor − custo da moto) abaixo disso = ruim. 0 = sem esse critério */
+    val lucroMinimo: Double = 0.0
 )
 
 enum class Veredito(val falado: String, val emoji: String) {
@@ -70,6 +72,7 @@ class CalculadoraCorrida(private val config: ConfigMoto) {
 
         val notaBaixa = o.notaPassageiro?.let { it < config.notaMinima } ?: false
         if (notaBaixa) veredito = Veredito.RUIM
+        if (config.lucroMinimo > 0 && lucro < config.lucroMinimo) veredito = Veredito.RUIM
 
         return AnaliseCorrida(
             o, kmTotal, ganhoPorKm, custo, lucro, lucroPorKm, ganhoPorHora,
@@ -108,4 +111,21 @@ object Formato {
     fun reais(v: Double): String = NumberFormat.getCurrencyInstance(ptBR).format(v)
     fun nota(v: Double): String = String.format(Locale.US, "%.2f", v).replace('.', ',')
     fun km(v: Double): String = String.format(Locale.US, "%.1f km", v).replace('.', ',')
+
+    /** 0,35 / 4,9 / 250 (sem zeros sobrando) */
+    fun numero(v: Double): String {
+        val f = NumberFormat.getNumberInstance(ptBR)
+        f.minimumFractionDigits = 0
+        f.maximumFractionDigits = 2
+        f.isGroupingUsed = false
+        return f.format(v)
+    }
+
+    fun inteiro(v: Double): String = Math.round(v).toString()
+
+    /** 3h 12min · 45 min */
+    fun duracao(ms: Long): String {
+        val min = ms / 60_000
+        return if (min < 60) "$min min" else "${min / 60}h ${String.format(Locale.US, "%02d", min % 60)}min"
+    }
 }

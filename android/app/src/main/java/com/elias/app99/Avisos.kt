@@ -25,6 +25,7 @@ object Notificador {
 
     /** 🟢 Corrida boa · ⭐ 4,95 / 💵 R$ 12,10 · 💰 Lucro R$ 8,18 / 📊 R$ 1,08/km · 📏 11,2 km */
     fun enviar(ctx: Context, a: AnaliseCorrida) {
+        if (!Ajustes.chave(ctx, "notificacoes", true)) return
         var titulo = "${a.veredito.emoji} ${a.veredito.falado}"
         a.oferta.notaPassageiro?.let {
             titulo += " · ⭐ ${Formato.nota(it)}"

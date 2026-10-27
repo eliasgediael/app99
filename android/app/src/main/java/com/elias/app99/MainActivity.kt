@@ -1,78 +1,66 @@
 package com.elias.app99
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
-import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.BarChart
+import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import java.time.Instant
+import kotlinx.coroutines.delay
 import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         Notificador.canais(this)
+        val faltando = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        ) faltando.add(Manifest.permission.POST_NOTIFICATIONS)
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            faltando.add(Manifest.permission.ACCESS_FINE_LOCATION)
+            faltando.add(Manifest.permission.ACCESS_COARSE_LOCATION)
         }
-        setContent {
-            MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
-                Surface(modifier = Modifier.fillMaxSize()) { App() }
-            }
-        }
+        if (faltando.isNotEmpty()) requestPermissions(faltando.toTypedArray(), 1)
+        setContent { ApexTema { App() } }
     }
 
     override fun onStart() {
@@ -86,51 +74,61 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Composable
-fun App() {
-    var aba by remember { mutableIntStateOf(0) }
-    val nomes = listOf("🛵" to "Turno", "📅" to "Dias", "🕒" to "Linha", "⚙️" to "Ajustes")
-    Scaffold(
-        bottomBar = {
-            NavigationBar {
-                nomes.forEachIndexed { i, (icone, nome) ->
-                    NavigationBarItem(
-                        selected = aba == i, onClick = { aba = i },
-                        icon = { Text(icone, fontSize = 20.sp) }, label = { Text(nome) }
-                    )
-                }
-            }
-        }
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            when (aba) {
-                0 -> TelaTurno()
-                1 -> TelaDias()
-                2 -> TelaLinha()
-                else -> TelaAjustes()
-            }
-        }
-    }
+/** Telas que abrem por cima das abas. */
+sealed class Detalhe {
+    object Configuracoes : Detalhe()
+    object Preferencias : Detalhe()
+    object Linha : Detalhe()
+    data class MeuDia(val data: LocalDate) : Detalhe()
 }
 
-@Composable
-fun Linha(rotulo: String, valor: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(rotulo)
-        Text(valor, fontWeight = FontWeight.SemiBold)
-    }
+/** Ações do turno, usadas por qualquer tela. */
+class AcoesTurno(val iniciar: () -> Unit, val pausar: () -> Unit, val retomar: () -> Unit, val encerrar: () -> Unit)
+
+fun comandoServico(ctx: Context, acao: String) {
+    ctx.startService(Intent(ctx, CapturaService::class.java).setAction(acao))
 }
 
-// MARK: Turno
-
+/** Corridas, turnos e dias, atualizados quando a leitura grava algo. */
 @Composable
-fun TelaTurno() {
+fun lembrarPainel(): Painel {
     val ctx = LocalContext.current
     val diario = remember { Diario.get(ctx) }
+    val eventos by diario.eventosFlow.collectAsState()
     val dias by diario.diasFlow.collectAsState()
-    val rodando by Estado.rodando.collectAsState()
-    val analise by Estado.ultimaAnalise.collectAsState()
-    val hoje = dias.firstOrNull { it.dia == Dia.numero() } ?: Dia(Dia.numero())
+    val turnos by remember { TurnoStore.get(ctx) }.turnos.collectAsState()
+    val corridas = remember(eventos) { Corridas.de(eventos) }
+    return remember(corridas, turnos, dias) { Painel(corridas, turnos, dias) }
+}
+
+/** Relógio que anda a cada 30 s (tempo do turno, R$/h). */
+@Composable
+fun lembrarAgora(): Long {
+    var agora by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            agora = System.currentTimeMillis()
+        }
+    }
+    return agora
+}
+
+private data class Aba(val nome: String, val icone: ImageVector)
+
+private val abas = listOf(
+    Aba("Turno", Icons.Rounded.Home),
+    Aba("Dias", Icons.Rounded.CalendarMonth),
+    Aba("Mapa", Icons.Rounded.Map),
+    Aba("Análises", Icons.Rounded.BarChart),
+)
+
+@Composable
+fun App() {
+    val ctx = LocalContext.current
+    var aba by rememberSaveable { mutableIntStateOf(0) }
+    val pilha = remember { mutableStateListOf<Detalhe>() }
+    BackHandler(enabled = pilha.isNotEmpty()) { pilha.removeAt(pilha.lastIndex) }
 
     val pedirCaptura = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
         val dados = r.data
@@ -143,178 +141,58 @@ fun TelaTurno() {
             )
         }
     }
-
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Apex", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Button(
-            onClick = {
-                if (rodando) {
-                    ctx.startService(Intent(ctx, CapturaService::class.java).setAction(CapturaService.ACAO_PARAR))
-                } else {
-                    val mpm = ctx.getSystemService(MediaProjectionManager::class.java)
-                    pedirCaptura.launch(mpm.createScreenCaptureIntent())
-                }
+    val acoes = remember {
+        AcoesTurno(
+            iniciar = {
+                val mpm = ctx.getSystemService(MediaProjectionManager::class.java)
+                pedirCaptura.launch(mpm.createScreenCaptureIntent())
             },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (rodando) "Encerrar turno" else "Iniciar turno") }
-        Text(
-            if (rodando) "Lendo a tela. Abra a 99." else "Parado. Ao iniciar, o Android pede permissão para gravar a tela.",
-            fontSize = 13.sp
+            pausar = { comandoServico(ctx, CapturaService.ACAO_PAUSAR) },
+            retomar = { comandoServico(ctx, CapturaService.ACAO_RETOMAR) },
+            encerrar = { comandoServico(ctx, CapturaService.ACAO_PARAR) }
         )
-
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Hoje", fontWeight = FontWeight.Bold)
-                Linha("Faturado (confirmadas)", Formato.reais(hoje.faturado))
-                Linha("Lucro", Formato.reais(hoje.lucro))
-                Linha("Corridas", "${hoje.corridas} de ${hoje.ofertas} ofertas")
-                Linha("Km", Formato.km(hoje.km))
-                hoje.porKm?.let { Linha("Por km", Formato.reais(it)) }
-                hoje.lucroPorHora?.let { Linha("Lucro por hora", Formato.reais(it)) }
-                Linha("Tempo ligado", "%.1f h".format(java.util.Locale.US, hoje.horas).replace('.', ','))
-                if (hoje.estimadas > 0) {
-                    Linha("Estimadas (fora do total)", "${hoje.estimadas} · ${Formato.reais(hoje.estimado)}")
-                }
-            }
-        }
-
-        analise?.let { a ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Última oferta: ${a.veredito.emoji} ${a.veredito.falado}", fontWeight = FontWeight.Bold)
-                    Linha("Valor", Formato.reais(a.oferta.valor))
-                    Linha("Lucro", Formato.reais(a.lucro))
-                    Linha("Por km", Formato.reais(a.ganhoPorKm))
-                    Linha("Distância total", Formato.km(a.kmTotal))
-                    Linha("Busca", Formato.km(a.oferta.kmAtePassageiro))
-                    a.oferta.notaPassageiro?.let { Linha("Nota", Formato.nota(it)) }
-                    a.ganhoPorHora?.let { Linha("Lucro por hora", Formato.reais(it)) }
-                }
-            }
-        }
     }
-}
+    val abrir: (Detalhe) -> Unit = { pilha.add(it) }
+    val voltar: () -> Unit = { if (pilha.isNotEmpty()) pilha.removeAt(pilha.lastIndex) }
 
-// MARK: Dias
-
-@Composable
-fun TelaDias() {
-    val ctx = LocalContext.current
-    val dias by remember { Diario.get(ctx) }.diasFlow.collectAsState()
-    val formato = DateTimeFormatter.ofPattern("dd/MM/yyyy")
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        if (dias.isEmpty()) item { Text("Nenhum turno ainda.") }
-        items(dias.asReversed()) { d ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(LocalDate.ofEpochDay(d.dia.toLong()).format(formato), fontWeight = FontWeight.Bold)
-                    Linha("Faturado", Formato.reais(d.faturado))
-                    Linha("Lucro", Formato.reais(d.lucro))
-                    Linha("Corridas", "${d.corridas} de ${d.ofertas} ofertas")
-                    Linha("Km", Formato.km(d.km))
-                    if (d.estimadas > 0) Linha("Estimadas", "${d.estimadas} · ${Formato.reais(d.estimado)}")
-                }
+    val topo = pilha.lastOrNull()
+    if (topo != null) {
+        Box(Modifier.fillMaxSize().background(Cor.fundo)) {
+            when (topo) {
+                Detalhe.Configuracoes -> TelaConfiguracoes(voltar, abrir)
+                Detalhe.Preferencias -> TelaPreferencias(voltar)
+                Detalhe.Linha -> TelaLinha(voltar)
+                is Detalhe.MeuDia -> TelaMeuDia(topo.data, voltar) { pilha.clear(); aba = 3 }
             }
         }
+        return
     }
-}
 
-// MARK: Linha do tempo
-
-@Composable
-fun TelaLinha() {
-    val ctx = LocalContext.current
-    val eventos by remember { Diario.get(ctx) }.eventosFlow.collectAsState()
-    val formato = DateTimeFormatter.ofPattern("dd/MM HH:mm:ss")
-    LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.fillMaxSize()
-    ) {
-        if (eventos.isEmpty()) item { Text("Sem eventos ainda.") }
-        items(eventos.takeLast(300).asReversed()) { e ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    val hora = Instant.ofEpochSecond(e.em).atZone(ZoneId.systemDefault()).format(formato)
-                    Text("$hora · ${e.tipo.nome}", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                    val estado = e.estadoNovo
-                    if (estado != null) {
-                        val conf = e.confianca?.let { " · ${it.nome}" } ?: ""
-                        Text("${e.estadoAnterior?.nome ?: "-"} → ${estado.nome}$conf", fontSize = 12.sp)
-                    }
-                    if (e.valorCent > 0) Text(Formato.reais(e.valorCent / 100.0), fontSize = 12.sp)
-                    val texto = e.motivo.texto(e.extra)
-                    if (texto.isNotEmpty()) Text(texto, fontSize = 12.sp)
-                }
-            }
-        }
-    }
-}
-
-// MARK: Ajustes
-
-@Composable
-fun CampoNumero(rotulo: String, chave: String, padrao: Double) {
-    val ctx = LocalContext.current
-    var texto by remember { mutableStateOf(Ajustes.texto(ctx, chave, padrao)) }
-    OutlinedTextField(
-        value = texto,
-        onValueChange = { novo ->
-            texto = novo
-            novo.replace(',', '.').toDoubleOrNull()?.let { Ajustes.salvar(ctx, chave, it) }
-        },
-        label = { Text(rotulo) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        modifier = Modifier.fillMaxWidth()
-    )
-}
-
-@Composable
-fun TelaAjustes() {
-    val ctx = LocalContext.current
-    val d = ConfigMoto()
-    var voz by remember { mutableStateOf(Ajustes.vozLigada(ctx)) }
-
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("Configuração da moto", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        CampoNumero("Custo por km (R$)", "custoPorKm", d.custoPorKm)
-        CampoNumero("Mínimo por km (R$) — abaixo disso, recusa", "minimoPorKm", d.minimoPorKm)
-        CampoNumero("Bom por km (R$) — acima disso, corrida boa", "bomPorKm", d.bomPorKm)
-        CampoNumero("Alerta de busca longa (km)", "alertaBuscaKm", d.alertaBuscaKm)
-        CampoNumero("Nota mínima do passageiro", "notaMinima", d.notaMinima)
-        CampoNumero("Velocidade da voz (1 = normal)", "velocidadeFala", 1.0)
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("Falar resultado")
-            Switch(checked = voz, onCheckedChange = { voz = it; Ajustes.definirVoz(ctx, it) })
-        }
-
-        OutlinedButton(
-            onClick = {
-                val pm = ctx.getSystemService(PowerManager::class.java)
-                if (!pm.isIgnoringBatteryOptimizations(ctx.packageName)) {
-                    ctx.startActivity(
-                        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${ctx.packageName}"))
+    Scaffold(
+        containerColor = Cor.fundo,
+        bottomBar = {
+            NavigationBar(containerColor = Cor.cartao) {
+                abas.forEachIndexed { i, a ->
+                    NavigationBarItem(
+                        selected = aba == i, onClick = { aba = i },
+                        icon = { Icon(a.icone, a.nome) }, label = { Text(a.nome) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Cor.azul, selectedTextColor = Cor.azul,
+                            indicatorColor = Cor.azul.copy(alpha = 0.14f),
+                            unselectedIconColor = Cor.texto2, unselectedTextColor = Cor.texto2
+                        )
                     )
                 }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Não otimizar bateria (evita o Android matar a leitura)") }
-
-        OutlinedButton(
-            onClick = { Diario.get(ctx).zerarHoje() },
-            modifier = Modifier.fillMaxWidth()
-        ) { Text("Zerar números de hoje") }
+            }
+        }
+    ) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            when (aba) {
+                0 -> TelaTurno(acoes, abrir) { aba = 1 }
+                1 -> TelaDias(abrir)
+                2 -> TelaMapa(abrir)
+                else -> TelaAnalises(abrir)
+            }
+        }
     }
 }
