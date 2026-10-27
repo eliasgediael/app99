@@ -156,6 +156,17 @@ object Sobreposicao {
         aviso.value = AvisoOferta(a)
     }
 
+    /** Aviso de uma oferta lida num print (marcado como teste). */
+    fun mostrarTeste(ctx: Context, a: AnaliseCorrida) {
+        if (!permitido(ctx)) return
+        principal.post {
+            val app = ctx.applicationContext
+            val gerente = wm ?: app.getSystemService(WindowManager::class.java).also { wm = it }
+            criarAviso(app, gerente)
+            aviso.value = AvisoOferta(a, teste = true)
+        }
+    }
+
     /** Aviso de exemplo, pra ver como fica (marcado como teste). */
     fun testar(ctx: Context, v: Veredito) {
         if (!permitido(ctx)) return
